@@ -7,4 +7,5 @@ extern CRITICAL_SECTION xlive_critsec_xnet_session_keys;
 
 BOOL InitXNet();
 BOOL UninitXNet();
+INT WINAPI XNetStartup(const XNetStartupParams *pxnsp);
 INT WINAPI XNetCreateKey(XNKID *pxnkid, XNKEY *pxnkey);

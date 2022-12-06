@@ -1,6 +1,7 @@
 #include <winsock2.h>
 #include "xdefs.hpp"
 #include "xwsa.hpp"
+#include "xnet.hpp"
 #include "xsocket.hpp"
 #include "../xlln/debug-text.hpp"
 #include "../xlln/xlln.hpp"
@@ -11,9 +12,16 @@ INT WINAPI XWSAStartup(WORD wVersionRequested, WSADATA *lpWSAData)
 	TRACE_FX();
 	INT result = WSAStartup(wVersionRequested, lpWSAData);
 	if (result != ERROR_SUCCESS) {
-		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s %08x.", __func__, result);
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "WSAStartup %08x.", result);
 		return result;
 	}
+	
+	result = XNetStartup(0);
+	if (result != ERROR_SUCCESS) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "XNetStartup %08x.", result);
+		return result;
+	}
+	
 	return ERROR_SUCCESS;
 }
 
