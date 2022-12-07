@@ -3,6 +3,7 @@
 #include "../xlln/debug-text.hpp"
 #include "../xlln/xlln.hpp"
 #include "../xlln/wnd-main.hpp"
+#include "xnotify.hpp"
 #include <chrono>
 #include <thread>
 #include <condition_variable>
@@ -64,18 +65,21 @@ static void ThreadHotkeys()
 	std::mutex mutexPause;
 	while (1) {
 		HWND hWnd = 0;
-
+		
 		EnterCriticalSection(&xlive_critsec_hotkeys);
-
+		
 		if (presentation_parameters_d3d9 && presentation_parameters_d3d9->hDeviceWindow) {
 			hWnd = presentation_parameters_d3d9->hDeviceWindow;
 		}
 		if (presentation_parameters_d3d10_d3d11 && presentation_parameters_d3d10_d3d11->OutputWindow) {
 			hWnd = presentation_parameters_d3d10_d3d11->OutputWindow;
 		}
-
+		
 		if (GetFocus() == hWnd || GetForegroundWindow() == hWnd) {
-
+			if (xlive_notify_system_ui_open) {
+				XLiveNotifyAddEvent(XN_SYS_UI, 0);
+			}
+			
 			for (int i = 0; i < hotkeyListenLen; i++) {
 				if (!*hotkeyId[i]) {
 					continue;

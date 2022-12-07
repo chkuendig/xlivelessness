@@ -69,6 +69,13 @@ static LRESULT CALLBACK DLLWindowProc(HWND hwnd, UINT message, WPARAM wParam, LP
 			break;
 		}
 		case WM_SYSCOMMAND: {
+			if (wParam == SC_RESTORE) {
+				XLiveNotifyAddEvent(XN_SYS_UI, 1);
+			}
+			else if (wParam == SC_MINIMIZE || wParam == SC_CLOSE) {
+				XLiveNotifyAddEvent(XN_SYS_UI, 0);
+			}
+			
 			if (wParam == SC_CLOSE) {
 				ShowXLLN(XLLN_SHOW_HIDE);
 				return 0;
@@ -594,9 +601,17 @@ uint32_t ShowXLLN(uint32_t dwShowType, uint32_t threadId)
 			
 			// If there were accounts that were auto logged in then do not pop the XLLN window.
 			if (anyGotAutoLogged) {
+				XLiveNotifyAddEvent(XN_SYS_UI, 0);
 				return ERROR_SUCCESS;
 			}
 		}
+	}
+	
+	if (dwShowType == XLLN_SHOW_HIDE) {
+		XLiveNotifyAddEvent(XN_SYS_UI, 0);
+	}
+	else if (dwShowType == XLLN_SHOW_HOME || dwShowType == XLLN_SHOW_LOGIN) {
+		XLiveNotifyAddEvent(XN_SYS_UI, 1);
 	}
 	
 	uint32_t *threadArgs = new uint32_t[2]{ threadId, dwShowType };
