@@ -814,8 +814,8 @@ SOCKET WINAPI XSocketBind(SOCKET perpetual_socket, const struct sockaddr *name, 
 	const uint16_t portBase = portHBO - portOffset;
 	uint16_t portShiftedHBO = 0;
 	
-	// If not a random port (0), and we are using base ports, and the offset value's base is not 0, then shift the port.
-	if (portHBO && IsUsingBasePort(xlive_base_port) && portBase % 1000 == 0) {
+	// If not a random port (0), and we are using base ports, then shift the port.
+	if (portHBO && IsUsingBasePort(xlive_base_port)) {
 		portShiftedHBO = xlive_base_port + portOffset;
 		SetSockAddrPort(&sockAddrExternal, portShiftedHBO);
 	}
