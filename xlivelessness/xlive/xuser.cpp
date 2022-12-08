@@ -1158,27 +1158,27 @@ DWORD WINAPI XUserWriteProfileSettings(DWORD dwUserIndex, DWORD dwNumSettings, c
 		XLLN_DEBUG_LOG_ECODE(result, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s ValidateSettings(...) error:", __func__);
 		return result;
 	}
-
+	
 	if (!xlln_file_config_path) {
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "XLLN Config is not set so the profile settings directories cannot be determined.");
 		return ERROR_FUNCTION_FAILED;
 	}
-
+	
 	wchar_t *pathConfig = PathFromFilename(xlln_file_config_path);
 	wchar_t *pathUser = FormMallocString(L"%sprofile/user/%hs/", pathConfig, xlive_users_info[dwUserIndex]->szUserName);
 	wchar_t *pathTitle = FormMallocString(L"%sprofile/title/%08X/%hs/", pathConfig, xlive_title_id, xlive_users_info[dwUserIndex]->szUserName);
 	delete[] pathConfig;
-
+	
 	for (uint32_t iSetting = 0; iSetting < dwNumSettings; iSetting++) {
 		uint8_t dataType;
 		uint16_t dataSize;
 		bool isTitleSetting;
 		bool canWrite;
 		GetXProfileSettingInfo(pSettings[iSetting].dwSettingId, &dataType, &dataSize, &isTitleSetting, &canWrite);
-
+		
 		const wchar_t *pathForSetting = isTitleSetting ? pathTitle : pathUser;
 		wchar_t *filePathSetting = FormMallocString(fileNameSetting, pathForSetting, pSettings[iSetting].dwSettingId);
-
+		
 		uint32_t errorMkdir = EnsureDirectoryExists(pathForSetting);
 		if (errorMkdir) {
 			XLLN_DEBUG_LOG_ECODE(errorMkdir, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_WARN, "%s EnsureDirectoryExists(...) error on path \"%ls\".", __func__, pathForSetting);
@@ -1186,50 +1186,51 @@ DWORD WINAPI XUserWriteProfileSettings(DWORD dwUserIndex, DWORD dwNumSettings, c
 			free(filePathSetting);
 			break;
 		}
-
-		FILE *fp;
-		errno_t errorFileOpen = _wfopen_s(&fp, filePathSetting, L"wb");
-		if (errorFileOpen) {
-			XLLN_DEBUG_LOG_ECODE(errorFileOpen, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s fopen(\"%ls\", \"wb\") error:", __func__, filePathSetting);
-			result = errorFileOpen;
-			free(filePathSetting);
-			break;
-		}
-		free(filePathSetting);
-
+		
 		uint32_t fileSize = dataSize;
 		uint8_t *dataLocation = 0;
 		switch (dataType) {
-		case XUSER_DATA_TYPE_INT32:
-			dataLocation = (uint8_t*)&pSettings[iSetting].data.nData;
-			break;
-		case XUSER_DATA_TYPE_INT64:
-			dataLocation = (uint8_t*)&pSettings[iSetting].data.i64Data;
-			break;
-		case XUSER_DATA_TYPE_DOUBLE:
-			dataLocation = (uint8_t*)&pSettings[iSetting].data.dblData;
-			break;
-		case XUSER_DATA_TYPE_FLOAT:
-			dataLocation = (uint8_t*)&pSettings[iSetting].data.fData;
-			break;
-		case XUSER_DATA_TYPE_DATETIME:
-			dataLocation = (uint8_t*)&pSettings[iSetting].data.ftData;
-			break;
-		case XUSER_DATA_TYPE_UNICODE:
-			dataLocation = (uint8_t*)&pSettings[iSetting].data.string.pwszData;
-			fileSize = pSettings[iSetting].data.string.cbData;
-			break;
-		case XUSER_DATA_TYPE_BINARY:
-			dataLocation = (uint8_t*)&pSettings[iSetting].data.binary.pbData;
-			fileSize = pSettings[iSetting].data.binary.cbData;
-			break;
+			case XUSER_DATA_TYPE_INT32: {
+				dataLocation = (uint8_t*)&pSettings[iSetting].data.nData;
+				break;
+			}
+			case XUSER_DATA_TYPE_INT64: {
+				dataLocation = (uint8_t*)&pSettings[iSetting].data.i64Data;
+				break;
+			}
+			case XUSER_DATA_TYPE_DOUBLE: {
+				dataLocation = (uint8_t*)&pSettings[iSetting].data.dblData;
+				break;
+			}
+			case XUSER_DATA_TYPE_FLOAT: {
+				dataLocation = (uint8_t*)&pSettings[iSetting].data.fData;
+				break;
+			}
+			case XUSER_DATA_TYPE_DATETIME: {
+				dataLocation = (uint8_t*)&pSettings[iSetting].data.ftData;
+				break;
+			}
+			case XUSER_DATA_TYPE_UNICODE: {
+				dataLocation = (uint8_t*)&pSettings[iSetting].data.string.pwszData;
+				fileSize = pSettings[iSetting].data.string.cbData;
+				break;
+			}
 		}
-
+		
 		if (fileSize > dataSize) {
 			XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s Setting (0x%08x) contents (size %u) is too big (need max size %u).", __func__, pSettings[iSetting].dwSettingId, fileSize, dataSize);
 			result = ERROR_FILE_TOO_LARGE;
 			break;
 		}
+		
+		switch (dataType) {
+			case XUSER_DATA_TYPE_BINARY: {
+				dataLocation = (uint8_t*)&pSettings[iSetting].data.binary.pbData;
+				fileSize = pSettings[iSetting].data.binary.cbData;
+				break;
+			}
+		}
+		
 		if (dataType == XUSER_DATA_TYPE_UNICODE && fileSize < sizeof(wchar_t)) {
 			XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s Invalid Setting (0x%08x) UNICODE fileSize (%u) must be greater than 2.", __func__, pSettings[iSetting].dwSettingId, fileSize);
 			result = ERROR_FILE_INVALID;
@@ -1240,28 +1241,39 @@ DWORD WINAPI XUserWriteProfileSettings(DWORD dwUserIndex, DWORD dwNumSettings, c
 			result = ERROR_FILE_INVALID;
 			break;
 		}
+		
+		FILE *fp;
+		errno_t errorFileOpen = _wfopen_s(&fp, filePathSetting, L"wb");
+		if (errorFileOpen) {
+			XLLN_DEBUG_LOG_ECODE(errorFileOpen, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s fopen(\"%ls\", \"wb\") error:", __func__, filePathSetting);
+			result = errorFileOpen;
+			free(filePathSetting);
+			break;
+		}
+		free(filePathSetting);
+		
 		if (dataType == XUSER_DATA_TYPE_UNICODE && (dataLocation[fileSize - 2] != 0 || dataLocation[fileSize - 1] != 0)) {
 			dataLocation[fileSize - 2] = dataLocation[fileSize - 1] = 0;
 			XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_WARN, "%s Invalid Setting (0x%08x) UNICODE/wchar_t text was not null terminated. Truncating data.", __func__, pSettings[iSetting].dwSettingId);
 		}
-
+		
 		fwrite(dataLocation, sizeof(uint8_t), fileSize, fp);
-
+		
 		fclose(fp);
 	}
-
+	
 	free(pathUser);
 	free(pathTitle);
-
+	
 	if (pXOverlapped) {
 		//asynchronous
-
+		
 		pXOverlapped->InternalLow = result;
 		pXOverlapped->InternalHigh = result;
 		pXOverlapped->dwExtendedError = result;
-
+		
 		Check_Overlapped(pXOverlapped);
-
+		
 		return ERROR_IO_PENDING;
 	}
 	else {
