@@ -1499,6 +1499,9 @@ typedef struct _STRING_VERIFY_RESPONSE {
 #define XN_SYS_INPUTACTIVITYCHANGED     XNID(9, _XNAREA_SYSTEM, 0x0020)
 #define XN_SYS_LAST                     XNID(0, _XNAREA_SYSTEM, 0x0023)
 
+#define XN_SYS_XLIVETITLEUPDATE ?
+#define XN_SYS_XLIVESYSTEMUPDATE ?
+
 //
 // Live notifications
 //

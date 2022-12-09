@@ -19,6 +19,8 @@
 typedef struct {
 	HANDLE listener;
 	uint32_t area;
+	// Key: notification_id. Value: notification_value.
+	std::map<uint32_t, uint32_t> pendingNotifications;
 } XNOTIFY_LISTENER_INFO;
 
 CRITICAL_SECTION xlive_critsec_xnotify;
@@ -26,8 +28,6 @@ CRITICAL_SECTION xlive_critsec_xnotify;
 static std::map<HANDLE, XNOTIFY_LISTENER_INFO> xlive_notify_listeners;
 // Key: single notification area. Value: listener handles that are in that area.
 static std::map<uint32_t, std::vector<HANDLE>> xlive_notify_listener_areas;
-// Key: notification_id. Value: notification_value.
-static std::map<uint32_t, uint32_t> xlive_notify_pending_notifications;
 
 bool xlive_notify_system_ui_open = false;
 
@@ -87,18 +87,15 @@ static void XLiveNotifyAddEvent_(uint32_t notification_id, uint32_t notification
 			case XN_LIVE_INVITE_ACCEPTED:
 			case XN_SYS_UI:
 			case XN_SYS_SIGNINCHANGED: {
-				xlive_notify_pending_notifications[notification_id] = notification_value;
+				xlive_notify_listeners[0].pendingNotifications[notification_id] = notification_value;
 				break;
 			}
 		}
 	}
 	else {
-		xlive_notify_pending_notifications[notification_id] = notification_value;
-		
-		// Trigger the event on all in that area since we do not know which listener will end up consuming the notification.
-		for (auto itrNotificationListener = xlive_notify_listener_areas[notificationArea].begin(); itrNotificationListener != xlive_notify_listener_areas[notificationArea].end(); itrNotificationListener++) {
-			SetEvent(*itrNotificationListener);
-		}
+		HANDLE xnotifyListener = *xlive_notify_listener_areas[notificationArea].begin();
+		xlive_notify_listeners[xnotifyListener].pendingNotifications[notification_id] = notification_value;
+		SetEvent(xnotifyListener);
 	}
 }
 
@@ -144,6 +141,11 @@ static bool XLiveNotifyDeleteListener_(HANDLE notification_listener)
 			}
 			iArea <<= 1;
 		}
+	}
+	
+	// Re-add the pending events.
+	for (auto itrPendingNotification = xlive_notify_listeners[notification_listener].pendingNotifications.begin(); itrPendingNotification != xlive_notify_listeners[notification_listener].pendingNotifications.end(); itrPendingNotification++) {
+		XLiveNotifyAddEvent_(itrPendingNotification->first, itrPendingNotification->second);
 	}
 	
 	xlive_notify_listeners.erase(notification_listener);
@@ -201,21 +203,23 @@ BOOL WINAPI XNotifyGetNext(HANDLE hNotification, DWORD dwMsgFilter, DWORD *pdwId
 		EnterCriticalSection(&xlive_critsec_xnotify);
 		
 		if (xlive_notify_listeners.count(hNotification)) {
-			uint32_t notificationArea = xlive_notify_listeners[hNotification].area;
-			
-			for (auto itrPendingNotification = xlive_notify_pending_notifications.begin(); itrPendingNotification != xlive_notify_pending_notifications.end(); itrPendingNotification++) {
-				uint32_t notificationPendingId = (*itrPendingNotification).first;
-				uint32_t notificationPendingValue = (*itrPendingNotification).second;
-				uint32_t notificationPendingArea = GetNotificationArea(notificationPendingId);
-				if (notificationPendingArea == notificationArea && (!dwMsgFilter || (dwMsgFilter && dwMsgFilter == notificationPendingId))) {
-					*pdwId = notificationPendingId;
+			if (dwMsgFilter) {
+				if (xlive_notify_listeners[hNotification].pendingNotifications.count(dwMsgFilter)) {
+					uint32_t notificationValue = xlive_notify_listeners[hNotification].pendingNotifications[dwMsgFilter];
+					*pdwId = dwMsgFilter;
 					if (pParam) {
-						*pParam = notificationPendingValue;
+						*pParam = notificationValue;
 					}
-					
-					xlive_notify_pending_notifications.erase(itrPendingNotification);
-					break;
+					xlive_notify_listeners[hNotification].pendingNotifications.erase(dwMsgFilter);
 				}
+			}
+			else if (xlive_notify_listeners[hNotification].pendingNotifications.size()) {
+				auto notification = xlive_notify_listeners[hNotification].pendingNotifications.begin();
+				*pdwId = notification->first;
+				if (pParam) {
+					*pParam = notification->second;
+				}
+				xlive_notify_listeners[hNotification].pendingNotifications.erase(notification);
 			}
 		}
 		
@@ -290,14 +294,11 @@ HANDLE WINAPI XNotifyCreateListener(ULONGLONG qwAreas)
 			iArea <<= 1;
 		}
 		
-		// Trigger the event since there is a pending notification for it.
-		for (auto itrPendingNotification = xlive_notify_pending_notifications.begin(); itrPendingNotification != xlive_notify_pending_notifications.end(); itrPendingNotification++) {
-			uint32_t notificationPendingId = (*itrPendingNotification).first;
-			uint32_t notificationPendingArea = GetNotificationArea(notificationPendingId);
-			if (notificationPendingArea & sanitisedAreas) {
-				SetEvent(xnotifyListener);
-				break;
-			}
+		// Re-add the pending events.
+		std::map<uint32_t, uint32_t> pendingNotifications = xlive_notify_listeners[0].pendingNotifications;
+		xlive_notify_listeners[0].pendingNotifications.clear();
+		for (auto itrPendingNotification = pendingNotifications.begin(); itrPendingNotification != pendingNotifications.end(); itrPendingNotification++) {
+			XLiveNotifyAddEvent_(itrPendingNotification->first, itrPendingNotification->second);
 		}
 		
 		LeaveCriticalSection(&xlive_critsec_xnotify);
@@ -311,6 +312,11 @@ bool InitXNotify()
 	// Initialise every possible existing area so there are no key issues later.
 	{
 		EnterCriticalSection(&xlive_critsec_xnotify);
+		
+		xlive_notify_listeners[0];
+		xlive_notify_listeners[0].listener = 0;
+		xlive_notify_listeners[0].area = XNOTIFY_ALL;
+		xlive_notify_listeners[0].pendingNotifications.clear();
 		
 		uint32_t iArea = 1;
 		while (1) {
@@ -335,6 +341,9 @@ bool UninitXNotify()
 		
 		for (auto itrNotificationListener = xlive_notify_listeners.begin(); itrNotificationListener != xlive_notify_listeners.end(); ) {
 			HANDLE hNotificationListener = (*itrNotificationListener++).first;
+			if (!hNotificationListener) {
+				continue;
+			}
 			XLiveNotifyDeleteListener_(hNotificationListener);
 			CloseHandle(hNotificationListener);
 		}
@@ -351,6 +360,11 @@ bool UninitXNotify()
 				iArea <<= 1;
 			}
 		}
+		
+		xlive_notify_listeners.clear();
+		xlive_notify_listeners[0];
+		xlive_notify_listeners[0].listener = 0;
+		xlive_notify_listeners[0].area = XNOTIFY_ALL;
 		
 		LeaveCriticalSection(&xlive_critsec_xnotify);
 	}
