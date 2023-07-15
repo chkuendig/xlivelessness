@@ -116,18 +116,25 @@ static uint32_t InjectModuleEntryPointHook(HMODULE hModule, void(post_imports_ho
 
 static void InitPostImports()
 {
-	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_TRACE | XLLN_LOG_LEVEL_DEBUG, "Hooked PE entity point invoked %s().", __func__);
-
+	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_TRACE | XLLN_LOG_LEVEL_DEBUG
+		, "Hooked PE entity point invoked %s()."
+		, __func__
+	);
+	
 	if (xlln_mutex_load_modules && xlln_file_config_path) {
 		wchar_t *configPath = PathFromFilename(xlln_file_config_path);
 		wchar_t *modulesPath = FormMallocString(L"%smodules/", configPath);
 		delete[] configPath;
-
+		
 		uint32_t errorMkdir = EnsureDirectoryExists(modulesPath);
 		if (errorMkdir) {
-			XLLN_DEBUG_LOG_ECODE(errorMkdir, XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_WARN, "%s EnsureDirectoryExists(...) error on path \"%ls\".", __func__, modulesPath);
+			XLLN_DEBUG_LOG_ECODE(errorMkdir, XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_WARN
+				, "%s EnsureDirectoryExists(...) error on path \"%ls\"."
+				, __func__
+				, modulesPath
+			);
 		}
-
+		
 		// Load all additional modules.
 		WIN32_FIND_DATAW data;
 		wchar_t *modulesSearch = FormMallocString(L"%s*.dll", modulesPath);
@@ -136,10 +143,16 @@ static void InitPostImports()
 		if (hFind != INVALID_HANDLE_VALUE) {
 			do {
 				wchar_t *xllnModuleFilePath = FormMallocString(L"%s%s", modulesPath, data.cFileName);
-				XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG, "Loading XLLN-Module: \"%ls\".", xllnModuleFilePath);
+				XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG
+					, "Loading XLLN-Module: \"%ls\"."
+					, xllnModuleFilePath
+				);
 				HINSTANCE hInstanceXllnModule = LoadLibraryW(xllnModuleFilePath);
 				if (hInstanceXllnModule) {
-					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_INFO, "XLLN-Module loaded: \"%ls\".", xllnModuleFilePath);
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_INFO
+						, "XLLN-Module loaded: \"%ls\"."
+						, xllnModuleFilePath
+					);
 					XLLN_MODULE_INFO *xllnModuleInfo = (XLLN_MODULE_INFO*)malloc(sizeof(XLLN_MODULE_INFO));
 					memset(xllnModuleInfo, 0, sizeof(XLLN_MODULE_INFO));
 					xllnModuleInfo->hInstance = hInstanceXllnModule;
@@ -147,15 +160,18 @@ static void InitPostImports()
 					xlln_modules.push_back(xllnModuleInfo);
 				}
 				else {
-					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_WARN, "XLLN-Module was not loaded: \"%ls\".", xllnModuleFilePath);
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_WARN
+						, "XLLN-Module was not loaded: \"%ls\"."
+						, xllnModuleFilePath
+					);
 					free(xllnModuleFilePath);
 				}
 			} while (FindNextFileW(hFind, &data));
 			FindClose(hFind);
 		}
-
+		
 		free(modulesPath);
-
+		
 		typedef DWORD(WINAPI *tXllnModulePostInit)();
 		for (unsigned int i = 0; i < xlln_modules.size(); i++) {
 			if (!xlln_modules[i]->hInstance) {
@@ -163,34 +179,49 @@ static void InitPostImports()
 			}
 			tXllnModulePostInit xllnModulePostInit = (tXllnModulePostInit)GetProcAddress(xlln_modules[i]->hInstance, (PCSTR)41101);
 			if (xllnModulePostInit) {
-				XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG, "Invoking XLLN-Module Post Init for: \"%ls\".", xlln_modules[i]->moduleName);
+				XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG
+					, "Invoking XLLN-Module Post Init for: \"%ls\"."
+					, xlln_modules[i]->moduleName
+				);
 				xlln_modules[i]->lastError = xllnModulePostInit();
 				if (xlln_modules[i]->lastError == ERROR_SUCCESS) {
-					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_INFO, "XLLN-Module Post Init invoked for: \"%ls\".", xlln_modules[i]->moduleName);
-				} else {
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_INFO
+						, "XLLN-Module Post Init invoked for: \"%ls\"."
+						, xlln_modules[i]->moduleName
+					);
+				}
+				else {
 					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_ERROR
 						, "XLLN-Module Post Init invoked and returned error 0x%08x \"%ls\"."
 						, xlln_modules[i]->lastError
 						, xlln_modules[i]->moduleName
 					);
 					FreeLibrary(xlln_modules[i]->hInstance);
-					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG, "Unloaded XLLN-Module: \"%ls\".", xlln_modules[i]->moduleName);
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG
+						, "Unloaded XLLN-Module: \"%ls\"."
+						, xlln_modules[i]->moduleName
+					);
 					xlln_modules[i]->hInstance = 0;
 				}
 			}
 		}
 	}
-
-	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG, "Returning from hooked PE entity point %s().", __func__);
+	
+	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG
+		, "Returning from hooked PE entity point %s()."
+		, __func__
+	);
 }
 
 bool InitXllnModules()
 {
 	if (!xlln_file_config_path) {
-		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_ERROR, "XLLN Config is not set so no XLLN-Modules directory can be loaded.");
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_ERROR
+			, "XLLN Config is not set so no XLLN-Modules directory can be loaded."
+		);
 		return true;
 	}
-
+	
 	char *mutexName = FormMallocString("Global\\XLiveLessNessModuleLoader0x%x", GetCurrentProcessId());
 	xlln_mutex_load_modules = CreateMutexA(0, TRUE, mutexName);
 	DWORD lastErr = GetLastError();
@@ -205,14 +236,17 @@ bool InitXllnModules()
 		xlln_mutex_load_modules = 0;
 	}
 	free(mutexName);
-
+	
 	if (!xlln_mutex_load_modules) {
 		MessageBoxA(NULL, "XLiveLessNess failed to get the mutex to enable loading XLLN-Modules.", "XLLN-Modules Loader Fail", MB_OK);
 		return true;
 	}
-
-	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG, "Obtained load XLLN-Module mutex: 0x%08x.", xlln_mutex_load_modules);
-
+	
+	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG
+		, "Obtained load XLLN-Module mutex: 0x%08x."
+		, xlln_mutex_load_modules
+	);
+	
 	// Emphasize that NOTHING else should be done after this point to cause this DLL not to load successfully.
 	uint32_t result = InjectModuleEntryPointHook(xlln_hmod_title, InitPostImports);
 	if (result != ERROR_SUCCESS) {
@@ -254,7 +288,7 @@ bool UninitXllnModules()
 			}
 		}
 	}
-
+	
 	unsigned int i = xlln_modules.size();
 	if (i) {
 		// Iterate backward and free all modules (in case order is important with undoing hooks for example).
@@ -278,10 +312,13 @@ bool UninitXllnModules()
 	}
 
 	if (xlln_mutex_load_modules) {
-		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG, "Closing load XLLN-Module mutex: 0x%08x.", xlln_mutex_load_modules);
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLLN_MODULE | XLLN_LOG_LEVEL_DEBUG
+			, "Closing load XLLN-Module mutex: 0x%08x."
+			, xlln_mutex_load_modules
+		);
 		CloseHandle(xlln_mutex_load_modules);
 		xlln_mutex_load_modules = 0;
 	}
-
+	
 	return true;
 }
