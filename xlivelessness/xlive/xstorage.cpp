@@ -10,23 +10,23 @@
 static uint32_t ToXStorageError(uint32_t error)
 {
 	uint32_t result = error;
-
+	
 	switch (result) {
-	case ERROR_ACCESS_DENIED:
-		result = XONLINE_E_STORAGE_ACCESS_DENIED;
-		break;
-	case ERROR_FILE_TOO_LARGE:
-		result = XONLINE_E_STORAGE_FILE_IS_TOO_BIG;
-		break;
-	case ERROR_INSUFFICIENT_BUFFER:
-		result = XONLINE_E_STORAGE_FILE_IS_TOO_BIG;
-		break;
-	case ERROR_FILE_NOT_FOUND:
-		result = XONLINE_E_STORAGE_FILE_NOT_FOUND;
-		break;
-	case ERROR_FILE_EXISTS:
-		result = XONLINE_E_STORAGE_FILE_ALREADY_EXISTS;
-		break;
+		case ERROR_ACCESS_DENIED:
+			result = XONLINE_E_STORAGE_ACCESS_DENIED;
+			break;
+		case ERROR_FILE_TOO_LARGE:
+			result = XONLINE_E_STORAGE_FILE_IS_TOO_BIG;
+			break;
+		case ERROR_INSUFFICIENT_BUFFER:
+			result = XONLINE_E_STORAGE_FILE_IS_TOO_BIG;
+			break;
+		case ERROR_FILE_NOT_FOUND:
+			result = XONLINE_E_STORAGE_FILE_NOT_FOUND;
+			break;
+		case ERROR_FILE_EXISTS:
+			result = XONLINE_E_STORAGE_FILE_ALREADY_EXISTS;
+			break;
 	}
 	return result;
 }
@@ -43,7 +43,7 @@ DWORD WINAPI XStorageUploadFromMemoryGetProgress(XOVERLAPPED *pXOverlapped, DWOR
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pqwNumerator and pqwDenominator must both be defined or undefined.", __func__);
 		return ERROR_INVALID_PARAMETER;
 	}
-
+	
 	if (pdwPercentComplete) {
 		*pdwPercentComplete = 100;
 	}
@@ -53,7 +53,7 @@ DWORD WINAPI XStorageUploadFromMemoryGetProgress(XOVERLAPPED *pXOverlapped, DWOR
 	if (pqwDenominator) {
 		*pqwDenominator = 100;
 	}
-
+	
 	return ERROR_SUCCESS;
 }
 
@@ -81,14 +81,14 @@ DWORD WINAPI XStorageUploadFromMemory(DWORD dwUserIndex, const WCHAR *wszServerP
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pbBuffer is NULL.", __func__);
 		return ERROR_INVALID_PARAMETER;
 	}
-
+	
 	if (!xlln_file_config_path) {
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "XLLN Config is not set so the storage directory cannot be determined.");
 		return XONLINE_E_STORAGE_CANNOT_FIND_PATH;
 	}
-
+	
 	uint32_t result = ERROR_SUCCESS;
-
+	
 	wchar_t *configPath = PathFromFilename(xlln_file_config_path);
 	wchar_t *storageFilePath = FormMallocString(L"%s%s", configPath, wszServerPath);
 	delete[] configPath;
@@ -99,7 +99,7 @@ DWORD WINAPI XStorageUploadFromMemory(DWORD dwUserIndex, const WCHAR *wszServerP
 		result = XONLINE_E_STORAGE_INVALID_STORAGE_PATH;
 	}
 	delete[] storagePath;
-
+	
 	if (!errorMkdir) {
 		FILE *fp;
 		errno_t errorFileOpen = _wfopen_s(&fp, storageFilePath, L"wb");
@@ -113,18 +113,18 @@ DWORD WINAPI XStorageUploadFromMemory(DWORD dwUserIndex, const WCHAR *wszServerP
 		}
 	}
 	delete[] storageFilePath;
-
+	
 	result = ToXStorageError(result);
-
+	
 	if (pXOverlapped) {
 		//asynchronous
-
+		
 		pXOverlapped->InternalLow = result;
 		pXOverlapped->InternalHigh = result;
 		pXOverlapped->dwExtendedError = result;
-
+		
 		Check_Overlapped(pXOverlapped);
-
+		
 		return ERROR_IO_PENDING;
 	}
 	else {
@@ -187,21 +187,21 @@ DWORD WINAPI XStorageEnumerate(
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pResults is NULL.", __func__);
 		return ERROR_INVALID_PARAMETER;
 	}
-
+	
 	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s TODO.", __func__);
-
+	
 	pResults->dwNumItemsReturned = 0;
 	pResults->dwTotalNumItems = 0;
-
+	
 	if (pXOverlapped) {
 		//asynchronous
-
+		
 		pXOverlapped->InternalLow = ERROR_SUCCESS;
 		pXOverlapped->InternalHigh = ERROR_SUCCESS;
 		pXOverlapped->dwExtendedError = ERROR_SUCCESS;
-
+		
 		Check_Overlapped(pXOverlapped);
-
+		
 		return ERROR_IO_PENDING;
 	}
 	else {
@@ -223,7 +223,7 @@ DWORD WINAPI XStorageDownloadToMemoryGetProgress(XOVERLAPPED *pXOverlapped, DWOR
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pqwNumerator and pqwDenominator must both be defined or undefined.", __func__);
 		return ERROR_INVALID_PARAMETER;
 	}
-
+	
 	if (pdwPercentComplete) {
 		*pdwPercentComplete = 100;
 	}
@@ -233,7 +233,7 @@ DWORD WINAPI XStorageDownloadToMemoryGetProgress(XOVERLAPPED *pXOverlapped, DWOR
 	if (pqwDenominator) {
 		*pqwDenominator = 100;
 	}
-
+	
 	return ERROR_SUCCESS;
 }
 
@@ -253,14 +253,14 @@ DWORD WINAPI XStorageDelete(DWORD dwUserIndex, const WCHAR *wszServerPath, XOVER
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s wszServerPath is NULL.", __func__);
 		return ERROR_INVALID_PARAMETER;
 	}
-
+	
 	if (!xlln_file_config_path) {
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "XLLN Config is not set so the storage directory cannot be determined.");
 		return XONLINE_E_STORAGE_CANNOT_FIND_PATH;
 	}
-
+	
 	uint32_t result = ERROR_SUCCESS;
-
+	
 	wchar_t *configPath = PathFromFilename(xlln_file_config_path);
 	wchar_t *storageFilePath = FormMallocString(L"%s%s", configPath, wszServerPath);
 	delete[] configPath;
@@ -271,7 +271,7 @@ DWORD WINAPI XStorageDelete(DWORD dwUserIndex, const WCHAR *wszServerPath, XOVER
 		result = XONLINE_E_STORAGE_INVALID_STORAGE_PATH;
 	}
 	delete[] storagePath;
-
+	
 	if (!errorMkdir) {
 		wchar_t *storageFilePathExt = FormMallocString(L"\\\\?\\%s", storageFilePath);
 		BOOL resultDelete = DeleteFileW(storageFilePathExt);
@@ -281,20 +281,20 @@ DWORD WINAPI XStorageDelete(DWORD dwUserIndex, const WCHAR *wszServerPath, XOVER
 		}
 		delete[] storageFilePathExt;
 	}
-
+	
 	delete[] storageFilePath;
-
+	
 	result = ToXStorageError(result);
-
+	
 	if (pXOverlapped) {
 		//asynchronous
-
+		
 		pXOverlapped->InternalLow = result;
 		pXOverlapped->InternalHigh = result;
 		pXOverlapped->dwExtendedError = result;
-
+		
 		Check_Overlapped(pXOverlapped);
-
+		
 		return ERROR_IO_PENDING;
 	}
 	else {
@@ -355,7 +355,7 @@ DWORD WINAPI XStorageBuildServerPath(
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s dwStorageFacilityInfoSize (%u) must be at least %u when pvStorageFacilityInfo is not NULL.", __func__, dwStorageFacilityInfoSize, sizeof(XSTORAGE_FACILITY_INFO_GAME_CLIP));
 		return ERROR_INVALID_PARAMETER;
 	}
-
+	
 	char *username = CloneString(xlive_users_info[dwUserIndex]->szUserName);
 	ReplaceFilePathSensitiveChars(username);
 	wchar_t *itemName = CloneString((wchar_t*)lpwszItemName);
@@ -367,15 +367,15 @@ DWORD WINAPI XStorageBuildServerPath(
 	delete[] username;
 	delete[] itemName;
 	size_t storageFilePathBufSize = (wcslen(storageFilePath) + 1) * sizeof(wchar_t);
-
+	
 	if (storageFilePathBufSize > *pdwServerPathLength) {
 		free(storageFilePath);
 		return ERROR_INSUFFICIENT_BUFFER;
 	}
-
+	
 	memcpy(pwszServerPath, storageFilePath, storageFilePathBufSize);
 	*pdwServerPathLength = storageFilePathBufSize;
-
+	
 	free(storageFilePath);
 	return ERROR_SUCCESS;
 }
@@ -447,14 +447,14 @@ DWORD WINAPI XStorageDownloadToMemory(
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pResults is NULL.", __func__);
 		return ERROR_INVALID_PARAMETER;
 	}
-
+	
 	if (!xlln_file_config_path) {
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "XLLN Config is not set so the storage directory cannot be determined.");
 		return XONLINE_E_STORAGE_CANNOT_FIND_PATH;
 	}
-
+	
 	uint32_t result = ERROR_SUCCESS;
-
+	
 	wchar_t *configPath = PathFromFilename(xlln_file_config_path);
 	wchar_t *storageFilePath = FormMallocString(L"%s%s", configPath, wszServerPath);
 	delete[] configPath;
@@ -465,7 +465,7 @@ DWORD WINAPI XStorageDownloadToMemory(
 		result = XONLINE_E_STORAGE_INVALID_STORAGE_PATH;
 	}
 	delete[] storagePath;
-
+	
 	if (!errorMkdir) {
 		FILE *fp;
 		errno_t errorFileOpen = _wfopen_s(&fp, storageFilePath, L"rb");
@@ -476,10 +476,10 @@ DWORD WINAPI XStorageDownloadToMemory(
 		else {
 			fseek(fp, 0, SEEK_END);
 			int32_t fileSize = ftell(fp);
-
+			
 			pResults->dwBytesTotal = fileSize;
 			pResults->xuidOwner = xlive_users_info[dwUserIndex]->xuid;
-
+			
 			if (fileSize < 0 || (uint32_t)fileSize > dwBufferSize) {
 				result = ERROR_INSUFFICIENT_BUFFER;
 				XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s (fileSize > dwBufferSize) (%u > %u).", __func__, fileSize, dwBufferSize);
@@ -489,11 +489,12 @@ DWORD WINAPI XStorageDownloadToMemory(
 				fseek(fp, 0, SEEK_SET);
 				fread((void *)pbBuffer, 1, fileSize, fp);
 				fclose(fp);
-
+				
 				HANDLE hFile = CreateFileW(storageFilePath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 				if (hFile == INVALID_HANDLE_VALUE) {
 					result = GetLastError();
 					XLLN_DEBUG_LOG_ECODE(result, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s CreateFileW(\"%ls\", GENERIC_READ, ...) error:", __func__, storageFilePath);
+					GetSystemTimeAsFileTime(&pResults->ftCreated);
 				}
 				else {
 					GetFileTime(hFile, &pResults->ftCreated, NULL, NULL);
@@ -503,18 +504,18 @@ DWORD WINAPI XStorageDownloadToMemory(
 		}
 	}
 	delete[] storageFilePath;
-
+	
 	result = ToXStorageError(result);
-
+	
 	if (pXOverlapped) {
 		//asynchronous
-
+		
 		pXOverlapped->InternalLow = result;
 		pXOverlapped->InternalHigh = result;
 		pXOverlapped->dwExtendedError = result;
-
+		
 		Check_Overlapped(pXOverlapped);
-
+		
 		return ERROR_IO_PENDING;
 	}
 	else {
