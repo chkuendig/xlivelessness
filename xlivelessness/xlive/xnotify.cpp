@@ -6,16 +6,6 @@
 #include <set>
 #include <vector>
 
-#define XNOTIFYUI_POS_TOPLEFT ?
-#define XNOTIFYUI_POS_TOPCENTER ?
-#define XNOTIFYUI_POS_TOPRIGHT ?
-#define XNOTIFYUI_POS_CENTERLEFT ?
-#define XNOTIFYUI_POS_CENTER ?
-#define XNOTIFYUI_POS_CENTERRIGHT ?
-#define XNOTIFYUI_POS_BOTTOMLEFT ?
-#define XNOTIFYUI_POS_BOTTOMCENTER ?
-#define XNOTIFYUI_POS_BOTTOMRIGHT ?
-
 typedef struct {
 	HANDLE listener;
 	uint32_t area;
@@ -233,12 +223,20 @@ BOOL WINAPI XNotifyGetNext(HANDLE hNotification, DWORD dwMsgFilter, DWORD *pdwId
 VOID WINAPI XNotifyPositionUI(DWORD dwPosition)
 {
 	TRACE_FX();
-	// Invalid dwPos--check XNOTIFYUI_POS_* bits.  Do not specify both TOP and BOTTOM or both LEFT and RIGHT.
-	if (dwPosition & 0xFFFFFFF0 || dwPosition & 1 && dwPosition & 2 || dwPosition & 8 && dwPosition & 4) {
+	if (
+		dwPosition & (~XNOTIFYUI_POS_MASK)
+		|| (dwPosition & XNOTIFYUI_POS_TOPCENTER && dwPosition & XNOTIFYUI_POS_BOTTOMCENTER)
+		|| (dwPosition & XNOTIFYUI_POS_CENTERLEFT && dwPosition & XNOTIFYUI_POS_CENTERRIGHT)
+	) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+			, "%s Invalid dwPosition (0x%08x). Check XNOTIFYUI_POS_* bits. Do not specify both TOP and BOTTOM or both LEFT and RIGHT."
+			, __func__
+			, dwPosition
+		);
 		return;
 	}
 	
-	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s TODO.", __func__);
+	// TODO Set overlay/popup preferred position whenever it actually gets implemented.
 }
 
 // #653
