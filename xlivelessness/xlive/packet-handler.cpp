@@ -21,25 +21,6 @@
 CRITICAL_SECTION xlive_critsec_broadcast_addresses;
 std::vector<XLLNBroadcastEntity::BROADCAST_ENTITY> xlive_broadcast_addresses;
 
-static VOID CustomMemCpy(void *dst, void *src, rsize_t len, bool directionAscending)
-{
-	if (directionAscending) {
-		for (rsize_t i = 0; i < len; i++) {
-			((BYTE*)dst)[i] = ((BYTE*)src)[i];
-		}
-	}
-	else {
-		if (len > 0) {
-			for (rsize_t i = len - 1; true; i--) {
-				((BYTE*)dst)[i] = ((BYTE*)src)[i];
-				if (i == 0) {
-					break;
-				}
-			}
-		}
-	}
-}
-
 // sock_addr_forwarded is optional if is_forwarded is true.
 // wrap_data_in is tUNKNOWN if packet data is already wrapped.
 void SendUnknownUserPacket(SOCKET perpetual_socket, const char* data_buffer, int data_buffer_size, XLLNNetPacketType::TYPE wrap_data_in, bool is_unknown_user_ask, const SOCKADDR_STORAGE *sock_addr_origin, bool is_forwarded, const SOCKADDR_STORAGE *sock_addr_forwarded, uint32_t instanceId_consume_remaining)
@@ -158,7 +139,17 @@ void SendUnknownUserPacket(SOCKET perpetual_socket, const char* data_buffer, int
 }
 
 // Process connectionless sockets only (UDP). sockAddrXlive as well as sockAddrXliveLen may be null.
-INT WINAPI XSocketRecvFromHelper(const int dataRecvSize, const SOCKET perpetual_socket, char *dataBuffer, const int dataBufferSize, const int flags, const SOCKADDR_STORAGE *sockAddrExternal, const int sockAddrExternalLen, sockaddr *sockAddrXlive, int *sockAddrXliveLen)
+INT WINAPI XSocketRecvFromHelper(
+	const int dataRecvSize
+	, const SOCKET perpetual_socket
+	, char *dataBuffer
+	, const int dataBufferSize
+	, const int flags
+	, const SOCKADDR_STORAGE *sockAddrExternal
+	, const int sockAddrExternalLen
+	, sockaddr *sockAddrXlive
+	, int *sockAddrXliveLen
+)
 {
 	TRACE_FX();
 	
@@ -698,21 +689,9 @@ INT WINAPI XSocketRecvFromHelper(const int dataRecvSize, const SOCKET perpetual_
 	return resultDataRecvSize;
 }
 
-// Process connectionless sockets only (UDP).
-// dataBuffer data must be wrapped in PacketType.
-INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int dataSendSize, int flags, const sockaddr *to, int tolen)
+bool XllnSocketBroadcastTo(INT *resultBroadcastTo, SOCKET perpetual_socket, const char *dataBuffer, int dataSendSize, int flags, const sockaddr *to, int tolen)
 {
 	TRACE_FX();
-	if (flags) {
-		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
-			, "%s flags argument must be 0 on Perpetual Socket 0x%08x."
-			, __func__
-			, perpetual_socket
-		);
-		
-		WSASetLastError(WSAEOPNOTSUPP);
-		return SOCKET_ERROR;
-	}
 	
 	SOCKADDR_STORAGE sockAddrExternal;
 	int sockAddrExternalLen = sizeof(sockAddrExternal);
@@ -724,7 +703,8 @@ INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int
 	const uint16_t portHBO = GetSockAddrPort(&sockAddrExternal);
 	
 	if (sockAddrExternal.ss_family == AF_INET && (ipv4HBO == INADDR_BROADCAST || ipv4HBO == INADDR_ANY)) {
-		INT resultDataSendSize = SOCKET_ERROR;
+		INT resultSend = SOCKET_ERROR;
+		int errorSend = WSAGetLastError();
 		
 		{
 			char *sockAddrInfo = GET_SOCKADDR_INFO(&sockAddrExternal);
@@ -819,7 +799,11 @@ INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int
 						
 						memcpy(&packetBuffer[packetSizeHeaderType + packetSizeTypeHubOutOfBand], dataBuffer, dataSendSize);
 						
-						resultDataSendSize = SendToPerpetualSocket(perpetual_socket, (const char*)packetBuffer, packetSize, 0, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+						resultSend = SendToPerpetualSocket(perpetual_socket, (const char*)packetBuffer, packetSize, 0, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+						errorSend = WSAGetLastError();
+						if (resultSend > 0) {
+							resultSend = ERROR_SUCCESS;
+						}
 						
 						delete[] packetBuffer;
 						
@@ -839,7 +823,11 @@ INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int
 						continue;
 					}
 					
-					resultDataSendSize = SendToPerpetualSocket(perpetual_socket, dataBuffer, dataSendSize, 0, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+					resultSend = SendToPerpetualSocket(perpetual_socket, dataBuffer, dataSendSize, 0, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+					errorSend = WSAGetLastError();
+					if (resultSend > 0) {
+						resultSend = ERROR_SUCCESS;
+					}
 					
 					{
 						char *sockAddrInfo = GET_SOCKADDR_INFO(&sockAddrExternal);
@@ -885,7 +873,11 @@ INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int
 				for (const uint16_t &portToBroadcastToHBO : portsToBroadcastToHBO) {
 					*portBroadcastNBO = htons(portToBroadcastToHBO);
 					
-					resultDataSendSize = SendToPerpetualSocket(perpetual_socket, dataBuffer, dataSendSize, 0, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+					resultSend = SendToPerpetualSocket(perpetual_socket, dataBuffer, dataSendSize, 0, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+					errorSend = WSAGetLastError();
+					if (resultSend > 0) {
+						resultSend = ERROR_SUCCESS;
+					}
 					
 					{
 						char *sockAddrInfo = GET_SOCKADDR_INFO(&sockAddrExternal);
@@ -905,9 +897,49 @@ INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int
 			LeaveCriticalSection(&xlive_critsec_broadcast_addresses);
 		}
 		
-		resultDataSendSize = dataSendSize;
+		*resultBroadcastTo = resultSend;
+		WSASetLastError(errorSend);
+		return true;
+	}
+	
+	return false;
+}
+
+// Process connectionless sockets only (UDP).
+// dataBuffer data must be wrapped in PacketType.
+INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int dataSendSize, int flags, const sockaddr *to, int tolen)
+{
+	TRACE_FX();
+	if (flags) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+			, "%s flags argument must be 0 on Perpetual Socket 0x%08x."
+			, __func__
+			, perpetual_socket
+		);
 		
-		WSASetLastError(ERROR_SUCCESS);
+		WSASetLastError(WSAEOPNOTSUPP);
+		return SOCKET_ERROR;
+	}
+	
+	SOCKADDR_STORAGE sockAddrExternal;
+	int sockAddrExternalLen = sizeof(sockAddrExternal);
+	memcpy(&sockAddrExternal, to, sockAddrExternalLen < tolen ? sockAddrExternalLen : tolen);
+	
+	const uint32_t ipv4NBO = ((struct sockaddr_in*)&sockAddrExternal)->sin_addr.s_addr;
+	// This address may (hopefully) be an instanceId.
+	const uint32_t ipv4HBO = ntohl(ipv4NBO);
+	const uint16_t portHBO = GetSockAddrPort(&sockAddrExternal);
+	
+	INT resultDataSendSize = SOCKET_ERROR;
+	int errorSend = WSAEINVAL;
+	if (XllnSocketBroadcastTo(&resultDataSendSize, perpetual_socket, dataBuffer, dataSendSize, flags, to, tolen)) {
+		errorSend = WSAGetLastError();
+		
+		if (resultDataSendSize == ERROR_SUCCESS) {
+			resultDataSendSize = dataSendSize;
+		}
+		
+		WSASetLastError(errorSend);
 		return resultDataSendSize;
 	}
 	else if (sockAddrExternal.ss_family != AF_INET) {
@@ -968,7 +1000,11 @@ INT WINAPI XllnSocketSendTo(SOCKET perpetual_socket, const char *dataBuffer, int
 		}
 	}
 	
-	return SendToPerpetualSocket(perpetual_socket, dataBuffer, dataSendSize, flags, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+	resultDataSendSize = SendToPerpetualSocket(perpetual_socket, dataBuffer, dataSendSize, flags, (const sockaddr*)&sockAddrExternal, sockAddrExternalLen);
+	errorSend = WSAGetLastError();
+	
+	WSASetLastError(errorSend);
+	return resultDataSendSize;
 }
 
 INT SendToPerpetualSocket(SOCKET perpetual_socket, const char *data_buffer, int data_buffer_size, int flags, const sockaddr *to, int tolen)

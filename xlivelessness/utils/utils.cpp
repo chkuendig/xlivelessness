@@ -632,6 +632,11 @@ const char* LastPathItem(const char *pathname)
 	return LastPathItem(pathname, EOF);
 }
 
+const char* LastPathItem(const char *pathname, size_t end_length)
+{
+	return LastPathItem((char*)pathname, end_length);
+}
+
 // Assuming whitespace trimmed pathname.
 // Can handle forward or back slash combined paths.
 const wchar_t* LastPathItem(const wchar_t *pathname)
@@ -639,18 +644,23 @@ const wchar_t* LastPathItem(const wchar_t *pathname)
 	return LastPathItem(pathname, EOF);
 }
 
-const char* LastPathItem(const char *pathname, size_t end_length)
+const wchar_t* LastPathItem(const wchar_t *pathname, size_t end_length)
+{
+	return LastPathItem((wchar_t*)pathname, end_length);
+}
+
+char* LastPathItem(char *pathname, size_t end_length)
 {
 	if (!pathname) {
 		return 0;
 	}
 	
-	const char *result = pathname;
+	char *result = pathname;
 	size_t pathnameLen = end_length != EOF ? end_length : strlen(pathname);
 	
 	// skip the last normal char and null sentinel
 	// (since we don't want to break on a folder path ending with a slash).
-	for (const char *pathnameScan = &pathname[pathnameLen - 2]; pathnameScan >= pathname; pathnameScan--) {
+	for (char *pathnameScan = &pathname[pathnameLen - 2]; pathnameScan >= pathname; pathnameScan--) {
 		if (*pathnameScan == '/' || *pathnameScan == '\\') {
 			result = &pathnameScan[1];
 			break;
@@ -660,18 +670,18 @@ const char* LastPathItem(const char *pathname, size_t end_length)
 	return result;
 }
 
-const wchar_t* LastPathItem(const wchar_t *pathname, size_t end_length)
+wchar_t* LastPathItem(wchar_t *pathname, size_t end_length)
 {
 	if (!pathname) {
 		return 0;
 	}
 	
-	const wchar_t *result = pathname;
+	wchar_t *result = pathname;
 	size_t pathnameLen = end_length != EOF ? end_length : wcslen(pathname);
 	
 	// skip the last normal char and null sentinel
 	// (since we don't want to break on a folder path ending with a slash).
-	for (const wchar_t *pathnameScan = &pathname[pathnameLen - 2]; pathnameScan >= pathname; pathnameScan--) {
+	for (wchar_t *pathnameScan = &pathname[pathnameLen - 2]; pathnameScan >= pathname; pathnameScan--) {
 		if (*pathnameScan == '/' || *pathnameScan == '\\') {
 			result = &pathnameScan[1];
 			break;
@@ -705,15 +715,20 @@ const char* FilenameFromPathname(const char *pathname)
 // Can handle forward or back slash combined paths.
 const wchar_t* FilenameFromPathname(const wchar_t *pathname)
 {
+	return FilenameFromPathname((wchar_t*)pathname);
+}
+// Can handle forward or back slash combined paths.
+wchar_t* FilenameFromPathname(wchar_t *pathname)
+{
 	if (!pathname) {
 		return 0;
 	}
 	
-	const wchar_t *result = pathname;
+	wchar_t *result = pathname;
 	size_t pathnameLen = wcslen(pathname);
 	
 	// skip the null sentinel
-	for (const wchar_t *pathnameScan = &pathname[pathnameLen - 1]; pathnameScan > pathname; pathnameScan--) {
+	for (wchar_t *pathnameScan = &pathname[pathnameLen - 1]; pathnameScan > pathname; pathnameScan--) {
 		if (*pathnameScan == '/' || *pathnameScan == '\\') {
 			result = &pathnameScan[1];
 			break;
@@ -997,6 +1012,19 @@ bool EndsWith(const wchar_t *str, const wchar_t *suffix)
 	return wcsncmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
 }
 
+bool EndsWithCaseInsensitive(const wchar_t *str, const wchar_t *suffix)
+{
+	if (!str || !suffix) {
+		return false;
+	}
+	size_t lenstr = wcslen(str);
+	size_t lensuffix = wcslen(suffix);
+	if (lensuffix > lenstr) {
+		return false;
+	}
+	return _wcsnicmp(str + lenstr - lensuffix, suffix, lensuffix) == 0;
+}
+
 uint32_t EnsureDirectoryExists(const wchar_t *path)
 {
 	int32_t resultMkdir = _wmkdir(path);
@@ -1015,4 +1043,23 @@ uint32_t EnsureDirectoryExists(const wchar_t *path)
 		return resultNested;
 	}
 	return errorMkdir;
+}
+
+void CustomMemCpy(void *dst, void *src, rsize_t len, bool direction_ascending)
+{
+	if (direction_ascending) {
+		for (rsize_t i = 0; i < len; i++) {
+			((uint8_t*)dst)[i] = ((uint8_t*)src)[i];
+		}
+	}
+	else {
+		if (len > 0) {
+			for (rsize_t i = len - 1; true; i--) {
+				((uint8_t*)dst)[i] = ((uint8_t*)src)[i];
+				if (i == 0) {
+					break;
+				}
+			}
+		}
+	}
 }

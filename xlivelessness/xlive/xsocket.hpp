@@ -35,10 +35,12 @@ extern std::map<SOCKET, SOCKET> xlive_xsocket_perpetual_to_transitory_socket;
 extern SOCKET xlive_xsocket_perpetual_core_socket;
 
 SOCKET XSocketGetTransitorySocket_(SOCKET perpetual_socket);
+SOCKET XSocketGetTransitorySocket(SOCKET perpetual_socket, bool *connectionless_socket);
 SOCKET XSocketGetTransitorySocket(SOCKET perpetual_socket);
 bool XSocketPerpetualSocketChangedError_(int errorSocket, SOCKET perpetual_socket, SOCKET transitory_socket);
 bool XSocketPerpetualSocketChangedError(int errorSocket, SOCKET perpetual_socket, SOCKET transitory_socket);
 uint8_t XSocketPerpetualSocketChanged_(SOCKET perpetual_socket, SOCKET transitory_socket);
+void XSocketRebindSockets_(SOCKET *perpetual_sockets, uint32_t perpetual_sockets_count);
 void XSocketRebindAllSockets();
 INT WINAPI XSocketRecvFrom(SOCKET perpetual_socket, char *dataBuffer, int dataBufferSize, int flags, sockaddr *from, int *fromlen);
 

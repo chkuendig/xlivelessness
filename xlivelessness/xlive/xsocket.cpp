@@ -7,6 +7,7 @@
 #include "../xlln/wnd-sockets.hpp"
 #include "../xlln/xlln-keep-alive.hpp"
 #include "xnet.hpp"
+#include "xwsa.hpp"
 #include "xlocator.hpp"
 #include "xnetqos.hpp"
 #include "packet-handler.hpp"
@@ -134,138 +135,155 @@ uint8_t XSocketPerpetualSocketChanged_(SOCKET perpetual_socket, SOCKET transitor
 	return result;
 }
 
+// If perpetual_sockets is not null and perpetual_sockets_count > 0 then only rebind the perpetual sockets provided in the array.
+// Otherwise rebind all possible sockets.
+void XSocketRebindSockets_(SOCKET *perpetual_sockets, uint32_t perpetual_sockets_count)
+{
+	std::map<SOCKET_MAPPING_INFO*, SOCKET_MAPPING_INFO*> oldToNew;
+	
+	for (const auto &socketInfo : xlive_socket_info) {
+		SOCKET_MAPPING_INFO &socketMappingInfoOld = *socketInfo.second;
+		if (socketMappingInfoOld.protocol != IPPROTO_UDP) {
+			// TODO support more than just UDP (like TCP).
+			XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_WARN
+				, "%s transitorySocket (0x%08x) protocol (%d) unsupported for rebinding."
+				, __func__
+				, socketMappingInfoOld.transitorySocket
+				, socketMappingInfoOld.protocol
+			);
+			continue;
+		}
+		
+		if (socketMappingInfoOld.portBindHBO == 0) {
+			// The port was never binded so doesn't have to be re-binded.
+			continue;
+		}
+		
+		if (perpetual_sockets && perpetual_sockets_count > 0) {
+			bool foundSocket = false;
+			for (uint32_t iPerpetualSockets = 0; iPerpetualSockets < perpetual_sockets_count; iPerpetualSockets++) {
+				if (perpetual_sockets[iPerpetualSockets] == socketMappingInfoOld.perpetualSocket) {
+					foundSocket = true;
+					break;
+				}
+			}
+			if (!foundSocket) {
+				continue;
+			}
+		}
+		
+		SOCKET_MAPPING_INFO *socketMappingInfoNew = (oldToNew[&socketMappingInfoOld] = new SOCKET_MAPPING_INFO);
+		*socketMappingInfoNew = socketMappingInfoOld;
+		socketMappingInfoNew->transitorySocket = socket(AF_INET, socketMappingInfoNew->type, socketMappingInfoNew->protocol);
+		if (socketMappingInfoNew->transitorySocket == INVALID_SOCKET) {
+			int errorSocket = WSAGetLastError();
+			XLLN_DEBUG_LOG_ECODE(errorSocket, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+				, "%s create socket error on perpetualSocket 0x%08x."
+				, __func__
+				, socketMappingInfoOld.perpetualSocket
+			);
+		}
+		
+		// If it was a random port, make sure when we rebind that it will be another random port since portBindHBO will be the port we will attempt to remake.
+		if (socketMappingInfoNew->portOgHBO == 0) {
+			socketMappingInfoNew->portBindHBO = 0;
+		}
+	}
+	
+	for (const auto &socketInfos : oldToNew) {
+		SOCKET_MAPPING_INFO &socketMappingInfoOld = *socketInfos.first;
+		SOCKET_MAPPING_INFO &socketMappingInfoNew = *socketInfos.second;
+		
+		xlive_socket_info[socketMappingInfoNew.transitorySocket] = &socketMappingInfoNew;
+		xlive_xsocket_perpetual_to_transitory_socket[socketMappingInfoNew.perpetualSocket] = socketMappingInfoNew.transitorySocket;
+		xlive_socket_info.erase(socketMappingInfoOld.transitorySocket);
+		
+		int resultShutdown = shutdown(socketMappingInfoOld.transitorySocket, SD_RECEIVE);
+		if (resultShutdown) {
+			int errorShutdown = WSAGetLastError();
+			XLLN_DEBUG_LOG_ECODE(errorShutdown, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+				, "%s shutdown error on transitorySocket 0x%08x."
+				, __func__
+				, socketMappingInfoOld.transitorySocket
+			);
+		}
+		
+		int resultCloseSocket = closesocket(socketMappingInfoOld.transitorySocket);
+		if (resultCloseSocket) {
+			int errorCloseSocket = WSAGetLastError();
+			XLLN_DEBUG_LOG_ECODE(errorCloseSocket, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+				, "%s close socket error on transitorySocket 0x%08x."
+				, __func__
+				, socketMappingInfoOld.transitorySocket
+			);
+		}
+	}
+	
+	for (const auto &socketInfos : oldToNew) {
+		SOCKET_MAPPING_INFO &socketMappingInfoOld = *socketInfos.first;
+		SOCKET_MAPPING_INFO &socketMappingInfoNew = *socketInfos.second;
+		
+		for (const auto &optionNameValue : *socketMappingInfoNew.socketOptions) {
+			int resultSetSockOpt = setsockopt(socketMappingInfoNew.transitorySocket, socketMappingInfoNew.protocol == IPPROTO_TCP ? IPPROTO_TCP : SOL_SOCKET, optionNameValue.first, (const char*)&optionNameValue.second, sizeof(uint32_t));
+			if (resultSetSockOpt) {
+				int errorSetSockOpt = WSAGetLastError();
+				XLLN_DEBUG_LOG_ECODE(errorSetSockOpt, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+					, "%s setsockopt failed to set option (0x%08x, 0x%08x) on new transitorySocket 0x%08x with error:"
+					, __func__
+					, optionNameValue.first
+					, optionNameValue.second
+					, socketMappingInfoNew.transitorySocket
+				);
+			}
+		}
+		
+		for (const auto &optionNameValue : *socketMappingInfoNew.socketIoctl) {
+			u_long cmdValue = optionNameValue.second;
+			int resultIoctlSocket = ioctlsocket(socketMappingInfoNew.transitorySocket, optionNameValue.first, &cmdValue);
+			if (resultIoctlSocket) {
+				int errorIoctlSocket = WSAGetLastError();
+				XLLN_DEBUG_LOG_ECODE(errorIoctlSocket, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+					, "%s ioctlsocket failed to set command (0x%08x, 0x%08x) on new transitorySocket 0x%08x with error:"
+					, __func__
+					, optionNameValue.first
+					, optionNameValue.second
+					, socketMappingInfoNew.transitorySocket
+				);
+			}
+		}
+		
+		sockaddr_in socketBindAddress;
+		socketBindAddress.sin_family = AF_INET;
+		socketBindAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+		socketBindAddress.sin_port = htons(socketMappingInfoNew.portBindHBO);
+		{
+			EnterCriticalSection(&xlive_critsec_network_adapter);
+			// TODO Should we perhaps not do this unless the user really wants to like if (xlive_init_preferred_network_adapter_name or config) is set?
+			if (xlive_network_adapter && xlive_network_adapter->unicastHAddr != INADDR_LOOPBACK) {
+				socketBindAddress.sin_addr.s_addr = htonl(xlive_network_adapter->unicastHAddr);
+			}
+			LeaveCriticalSection(&xlive_critsec_network_adapter);
+		}
+		SOCKET resultSocketBind = bind(socketMappingInfoNew.transitorySocket, (sockaddr*)&socketBindAddress, sizeof(socketBindAddress));
+		if (resultSocketBind) {
+			int errorBind = WSAGetLastError();
+			XLLN_DEBUG_LOG_ECODE(errorBind, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
+				, "%s bind error on new transitorySocket 0x%08x."
+				, __func__
+				, socketMappingInfoNew.transitorySocket
+			);
+		}
+		
+		delete &socketMappingInfoOld;
+	}
+	
+	XllnWndSocketsInvalidateSockets();
+}
 void XSocketRebindAllSockets()
 {
 	EnterCriticalSection(&xlive_critsec_sockets);
 	
-	{
-		std::map<SOCKET_MAPPING_INFO*, SOCKET_MAPPING_INFO*> oldToNew;
-		
-		for (const auto &socketInfo : xlive_socket_info) {
-			SOCKET_MAPPING_INFO &socketMappingInfoOld = *socketInfo.second;
-			if (socketMappingInfoOld.protocol != IPPROTO_UDP) {
-				// TODO support more than just UDP (like TCP).
-				XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_WARN
-					, "%s transitorySocket (0x%08x) protocol (%d) unsupported for rebinding."
-					, __func__
-					, socketMappingInfoOld.transitorySocket
-					, socketMappingInfoOld.protocol
-				);
-				continue;
-			}
-			
-			if (socketMappingInfoOld.portBindHBO == 0) {
-				// The port was never binded so doesn't have to be re-binded.
-				continue;
-			}
-			
-			SOCKET_MAPPING_INFO *socketMappingInfoNew = (oldToNew[&socketMappingInfoOld] = new SOCKET_MAPPING_INFO);
-			*socketMappingInfoNew = socketMappingInfoOld;
-			socketMappingInfoNew->transitorySocket = socket(AF_INET, socketMappingInfoNew->type, socketMappingInfoNew->protocol);
-			if (socketMappingInfoNew->transitorySocket == INVALID_SOCKET) {
-				int errorSocket = WSAGetLastError();
-				XLLN_DEBUG_LOG_ECODE(errorSocket, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
-					, "%s create socket error on perpetualSocket 0x%08x."
-					, __func__
-					, socketMappingInfoOld.perpetualSocket
-				);
-			}
-			
-			// If it was a random port, make sure when we rebind that it will be another random port since portBindHBO will be the port we will attempt to remake.
-			if (socketMappingInfoNew->portOgHBO == 0) {
-				socketMappingInfoNew->portBindHBO = 0;
-			}
-		}
-		
-		for (const auto &socketInfos : oldToNew) {
-			SOCKET_MAPPING_INFO &socketMappingInfoOld = *socketInfos.first;
-			SOCKET_MAPPING_INFO &socketMappingInfoNew = *socketInfos.second;
-			
-			xlive_socket_info[socketMappingInfoNew.transitorySocket] = &socketMappingInfoNew;
-			xlive_xsocket_perpetual_to_transitory_socket[socketMappingInfoNew.perpetualSocket] = socketMappingInfoNew.transitorySocket;
-			xlive_socket_info.erase(socketMappingInfoOld.transitorySocket);
-			
-			int resultShutdown = shutdown(socketMappingInfoOld.transitorySocket, SD_RECEIVE);
-			if (resultShutdown) {
-				int errorShutdown = WSAGetLastError();
-				XLLN_DEBUG_LOG_ECODE(errorShutdown, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
-					, "%s shutdown error on transitorySocket 0x%08x."
-					, __func__
-					, socketMappingInfoOld.transitorySocket
-				);
-			}
-			
-			int resultCloseSocket = closesocket(socketMappingInfoOld.transitorySocket);
-			if (resultCloseSocket) {
-				int errorCloseSocket = WSAGetLastError();
-				XLLN_DEBUG_LOG_ECODE(errorCloseSocket, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
-					, "%s close socket error on transitorySocket 0x%08x."
-					, __func__
-					, socketMappingInfoOld.transitorySocket
-				);
-			}
-		}
-		
-		for (const auto &socketInfos : oldToNew) {
-			SOCKET_MAPPING_INFO &socketMappingInfoOld = *socketInfos.first;
-			SOCKET_MAPPING_INFO &socketMappingInfoNew = *socketInfos.second;
-			
-			for (const auto &optionNameValue : *socketMappingInfoNew.socketOptions) {
-				int resultSetSockOpt = setsockopt(socketMappingInfoNew.transitorySocket, socketMappingInfoNew.protocol == IPPROTO_TCP ? IPPROTO_TCP : SOL_SOCKET, optionNameValue.first, (const char*)&optionNameValue.second, sizeof(uint32_t));
-				if (resultSetSockOpt) {
-					int errorSetSockOpt = WSAGetLastError();
-					XLLN_DEBUG_LOG_ECODE(errorSetSockOpt, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
-						, "%s setsockopt failed to set option (0x%08x, 0x%08x) on new transitorySocket 0x%08x with error:"
-						, __func__
-						, optionNameValue.first
-						, optionNameValue.second
-						, socketMappingInfoNew.transitorySocket
-					);
-				}
-			}
-			
-			for (const auto &optionNameValue : *socketMappingInfoNew.socketIoctl) {
-				u_long cmdValue = optionNameValue.second;
-				int resultIoctlSocket = ioctlsocket(socketMappingInfoNew.transitorySocket, optionNameValue.first, &cmdValue);
-				if (resultIoctlSocket) {
-					int errorIoctlSocket = WSAGetLastError();
-					XLLN_DEBUG_LOG_ECODE(errorIoctlSocket, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
-						, "%s ioctlsocket failed to set command (0x%08x, 0x%08x) on new transitorySocket 0x%08x with error:"
-						, __func__
-						, optionNameValue.first
-						, optionNameValue.second
-						, socketMappingInfoNew.transitorySocket
-					);
-				}
-			}
-			
-			sockaddr_in socketBindAddress;
-			socketBindAddress.sin_family = AF_INET;
-			socketBindAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-			socketBindAddress.sin_port = htons(socketMappingInfoNew.portBindHBO);
-			{
-				EnterCriticalSection(&xlive_critsec_network_adapter);
-				// TODO Should we perhaps not do this unless the user really wants to like if (xlive_init_preferred_network_adapter_name or config) is set?
-				if (xlive_network_adapter && xlive_network_adapter->unicastHAddr != INADDR_LOOPBACK) {
-					socketBindAddress.sin_addr.s_addr = htonl(xlive_network_adapter->unicastHAddr);
-				}
-				LeaveCriticalSection(&xlive_critsec_network_adapter);
-			}
-			SOCKET resultSocketBind = bind(socketMappingInfoNew.transitorySocket, (sockaddr*)&socketBindAddress, sizeof(socketBindAddress));
-			if (resultSocketBind) {
-				int errorBind = WSAGetLastError();
-				XLLN_DEBUG_LOG_ECODE(errorBind, XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR
-					, "%s bind error on new transitorySocket 0x%08x."
-					, __func__
-					, socketMappingInfoNew.transitorySocket
-				);
-			}
-			
-			delete &socketMappingInfoOld;
-		}
-	}
-	
-	XllnWndSocketsInvalidateSockets();
+	XSocketRebindSockets_(0, 0);
 	
 	LeaveCriticalSection(&xlive_critsec_sockets);
 }
@@ -422,6 +440,8 @@ INT WINAPI XSocketClose(SOCKET perpetual_socket)
 				WSASetLastError(WSAENOTSOCK);
 				return SOCKET_ERROR;
 			}
+			
+			XWSADeleteOverlappedSocket_(perpetual_socket, transitorySocket);
 			
 			SOCKET_MAPPING_INFO *socketMappingInfo = xlive_socket_info[transitorySocket];
 			xlive_socket_info.erase(transitorySocket);
@@ -1332,8 +1352,11 @@ INT WINAPI XSocketRecvFrom(SOCKET perpetual_socket, char *data_buffer, int data_
 		
 		if (resultDataRecvSizeFromHelper > 0 && largeDataBuffer) {
 			if (resultDataRecvSizeFromHelper > data_buffer_size) {
+				memcpy(data_buffer, largeDataBuffer, data_buffer_size);
+				
 				delete[] largeDataBuffer;
 				largeDataBuffer = 0;
+				
 				WSASetLastError(WSAEMSGSIZE);
 				return SOCKET_ERROR;
 			}

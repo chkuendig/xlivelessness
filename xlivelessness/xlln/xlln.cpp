@@ -14,6 +14,8 @@
 #include "../xlive/xlocator.hpp"
 #include "../xlive/xrender.hpp"
 #include "../xlive/net-entity.hpp"
+#include "../xlive/xsocket.hpp"
+#include "../xlive/xwsa.hpp"
 #include "../xlive/xuser.hpp"
 #include "../xlive/xsession.hpp"
 #include "../xlive/xnet.hpp"
@@ -593,6 +595,7 @@ void InitCriticalSections()
 	InitializeCriticalSection(&xlive_critsec_fps_limit);
 	InitializeCriticalSection(&xlln_critsec_guide_ui_handlers);
 	InitializeCriticalSection(&xlive_critsec_sockets);
+	InitializeCriticalSection(&xlive_critsec_overlapped_sockets);
 	InitializeCriticalSection(&xlive_critsec_xnet_session_keys);
 	InitializeCriticalSection(&xlive_critsec_broadcast_addresses);
 	InitializeCriticalSection(&xlln_critsec_base_port_offset_mappings);
@@ -622,6 +625,7 @@ void UninitCriticalSections()
 	DeleteCriticalSection(&xlive_critsec_fps_limit);
 	DeleteCriticalSection(&xlln_critsec_guide_ui_handlers);
 	DeleteCriticalSection(&xlive_critsec_sockets);
+	DeleteCriticalSection(&xlive_critsec_overlapped_sockets);
 	DeleteCriticalSection(&xlive_critsec_xnet_session_keys);
 	DeleteCriticalSection(&xlive_critsec_broadcast_addresses);
 	DeleteCriticalSection(&xlln_critsec_base_port_offset_mappings);
