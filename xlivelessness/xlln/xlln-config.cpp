@@ -264,6 +264,22 @@ static int interpretConfigSetting(const char *fileLine, const char *version, siz
 						broadcastAddrInput = CloneString(value);
 					}
 				}
+				else if (SettingNameMatches("xlln_direct_ip_connect_password")) {
+					if (configContext.saveValuesRead) {
+						if (xlln_direct_ip_connect_password) {
+							delete[] xlln_direct_ip_connect_password;
+						}
+						xlln_direct_ip_connect_password = CloneString(value);
+					}
+				}
+				else if (SettingNameMatches("xlln_direct_ip_connect_ip_port")) {
+					if (configContext.saveValuesRead) {
+						if (xlln_direct_ip_connect_ip_port) {
+							delete[] xlln_direct_ip_connect_ip_port;
+						}
+						xlln_direct_ip_connect_ip_port = CloneString(value);
+					}
+				}
 				else if (SettingNameMatches("xlive_auto_login_on_xliveinitialize")) {
 					uint32_t tempuint32;
 					if (sscanf_s(value, "%u", &tempuint32) == 1) {
@@ -476,6 +492,15 @@ static uint32_t SaveXllnConfig(const wchar_t *file_config_path, INTERPRET_CONFIG
 	WriteText("\n# glitchyscripts.com:1100,192.168.0.255:1100,[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:1100");
 	WriteText("\n");
 	
+	WriteText("\n# xlln_direct_ip_connect_password:");
+	WriteText("\n# The last used password used to host or connect with via Direct IP.");
+	WriteText("\n");
+	
+	WriteText("\n# xlln_direct_ip_connect_ip_port:");
+	WriteText("\n# The saved IP address and Port of a lobby to connect to.");
+	WriteText("\n# The IP and Port are separated with a colon ':'. Since IPv6 uses colons in its format, IPv6 addresses need to be enclosed in square brackets '[' and ']'.");
+	WriteText("\n");
+	
 	WriteText("\n# xlive_auto_login_on_xliveinitialize:");
 	WriteText("\n# Valid values:");
 	WriteText("\n#   0 - (DEFAULT) No action.");
@@ -525,6 +550,8 @@ static uint32_t SaveXllnConfig(const wchar_t *file_config_path, INTERPRET_CONFIG
 	WriteTextF("\nxlive_network_adapter = %s", xlive_config_preferred_network_adapter_name ? xlive_config_preferred_network_adapter_name : "");
 	WriteTextF("\nxlive_ignore_title_network_adapter = %u", xlive_ignore_title_network_adapter ? 1 : 0);
 	WriteTextF("\nxlive_broadcast_address = %s", broadcastAddrInput);
+	WriteTextF("\nxlln_direct_ip_connect_password = %s", xlln_direct_ip_connect_password);
+	WriteTextF("\nxlln_direct_ip_connect_ip_port = %s", xlln_direct_ip_connect_ip_port);
 	WriteTextF("\nxlive_auto_login_on_xliveinitialize = %u", xlive_auto_login_on_xliveinitialize ? 1 : 0);
 	for (uint32_t iUser = 0; iUser < XLIVE_LOCAL_USER_COUNT; iUser++) {
 		WriteTextF("\nxlive_username_p%u = %s", iUser + 1, xlive_users_username[iUser]);

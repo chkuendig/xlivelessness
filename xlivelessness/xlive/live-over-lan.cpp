@@ -58,14 +58,14 @@ void LiveOverLanBroadcastLocalSessionUnadvertise(const XUID xuid)
 	);
 	
 	const int packetSizeHeaderType = sizeof(XLLNNetPacketType::TYPE);
-	const int packetSizeLiveOverLanUnadvertise = sizeof(XLLNNetPacketType::LIVE_OVER_LAN_UNADVERTISE);
-	const int packetSize = packetSizeHeaderType + packetSizeLiveOverLanUnadvertise;
+	const int packetSizeTypeLiveOverLanUnadvertise = sizeof(XLLNNetPacketType::LIVE_OVER_LAN_UNADVERTISE);
+	const int packetSize = packetSizeHeaderType + packetSizeTypeLiveOverLanUnadvertise;
 	
 	uint8_t *packetBuffer = new uint8_t[packetSize];
 	packetBuffer[0] = XLLNNetPacketType::tLIVE_OVER_LAN_UNADVERTISE;
 	XLLNNetPacketType::LIVE_OVER_LAN_UNADVERTISE &liveOverLanUnadvertise = *(XLLNNetPacketType::LIVE_OVER_LAN_UNADVERTISE*)&packetBuffer[packetSizeHeaderType];
 	liveOverLanUnadvertise.xuid = xuid;
-
+	
 	XllnSocketSendTo(
 		xlive_xsocket_perpetual_core_socket
 		, (char*)packetBuffer

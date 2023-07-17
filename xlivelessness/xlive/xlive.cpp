@@ -8,9 +8,11 @@
 #include "../xlln/wnd-main.hpp"
 #include "../utils/utils.hpp"
 #include "../utils/util-socket.hpp"
+#include "../utils/sha256.hpp"
 #include "xsocket.hpp"
 #include "xwsa.hpp"
 #include "xlocator.hpp"
+#include "packet-handler.hpp"
 #include "xsession.hpp"
 #include "xpresence.hpp"
 #include "xmarketplace.hpp"
@@ -54,6 +56,8 @@ CRITICAL_SECTION xlive_critsec_title_server_enumerators;
 // Key: enumerator handle (id).
 // Value: Vector of ??? that have already been returned for that enumerator.
 static std::map<HANDLE, std::vector<uint32_t>> xlive_title_server_enumerators;
+
+DIRECT_IP_CONNECT xlln_direct_ip_connect;
 
 static XLIVE_DEBUG_LEVEL xlive_xdlLevel = XLIVE_DEBUG_LEVEL_OFF;
 
@@ -1528,6 +1532,74 @@ DWORD WINAPI XFriendsCreateEnumerator(DWORD dwUserIndex, DWORD dwStartingIndex, 
 	return ERROR_SUCCESS;
 }
 
+void XllnDirectIpConnectCancel()
+{
+	memset(&xlln_direct_ip_connect, 0, sizeof(xlln_direct_ip_connect));
+	EnableWindow(GetDlgItem(xlln_window_hwnd, MYWINDOW_BTN_DIRECT_IP_CONNECT), true);
+}
+
+void XllnDirectIpConnectTo(uint32_t local_player_id, SOCKADDR_STORAGE *remote_sockaddr, const char *remote_password)
+{
+	if (xlln_direct_ip_connect.joinRequestSignature && xlln_direct_ip_connect.timeoutAt) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_ERROR, "%s There is already an active direct IP connection attempt.", __func__);
+		MessageBoxW(xlln_window_hwnd, L"There is already an active direct IP connection attempt.", L"XLLN Direct IP Connect Error", MB_OK);
+		return;
+	}
+	
+	if (local_player_id >= XLIVE_LOCAL_USER_COUNT) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_ERROR, "%s User 0x%08x does not exist.", __func__, local_player_id);
+		wchar_t *messageDescription = FormMallocString(L"User %d does not exist.", local_player_id + 1);
+		MessageBoxW(xlln_window_hwnd, messageDescription, L"XLLN Direct IP Connect Error", MB_OK);
+		free(messageDescription);
+		return;
+	}
+	if (xlive_users_info[local_player_id]->UserSigninState == eXUserSigninState_NotSignedIn) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_ERROR, "%s User %u is not signed in.", __func__, local_player_id);
+		wchar_t *messageDescription = FormMallocString(L"User %d is not signed in.", local_player_id + 1);
+		MessageBoxW(xlln_window_hwnd, messageDescription, L"XLLN Direct IP Connect Error", MB_OK);
+		free(messageDescription);
+		return;
+	}
+	
+	EnableWindow(GetDlgItem(xlln_window_hwnd, MYWINDOW_BTN_DIRECT_IP_CONNECT), false);
+	
+	__time64_t ltime;
+	_time64(&ltime);//seconds since epoch.
+	
+	xlln_direct_ip_connect.timeoutAt = ltime + 5;
+	
+	while (!(xlln_direct_ip_connect.joinRequestSignature = rand()));
+	xlln_direct_ip_connect.localPlayerId = local_player_id;
+	
+	{
+		const int packetSizeHeaderType = sizeof(XLLNNetPacketType::TYPE);
+		const int packetSizeTypeDirectIpRequest = sizeof(XLLNNetPacketType::DIRECT_IP_REQUEST);
+		const int packetSize = packetSizeHeaderType + packetSizeTypeDirectIpRequest;
+		
+		uint8_t *packetBuffer = new uint8_t[packetSize];
+		packetBuffer[0] = XLLNNetPacketType::tDIRECT_IP_REQUEST;
+		XLLNNetPacketType::DIRECT_IP_REQUEST &directIpRequest = *(XLLNNetPacketType::DIRECT_IP_REQUEST*)&packetBuffer[packetSizeHeaderType];
+		memset(&directIpRequest, 0, sizeof(XLLNNetPacketType::DIRECT_IP_REQUEST));
+		directIpRequest.joinRequestSignature = xlln_direct_ip_connect.joinRequestSignature;
+		
+		uint32_t remotePasswordLen = strlen(remote_password);
+		if (remotePasswordLen) {
+			mbedtls_sha256((const uint8_t*)remote_password, remotePasswordLen, directIpRequest.passwordSha256, 0);
+		}
+		
+		int bytesSent = SendToPerpetualSocket(
+			xlive_xsocket_perpetual_core_socket
+			, (char*)packetBuffer
+			, packetSize
+			, 0
+			, (const SOCKADDR*)remote_sockaddr
+			, sizeof(SOCKADDR_STORAGE)
+		);
+		
+		delete[] packetBuffer;
+	}
+}
+
 // #5315
 DWORD WINAPI XInviteGetAcceptedInfo(DWORD dwUserIndex, XINVITE_INFO *pInfo)
 {
@@ -1544,36 +1616,45 @@ DWORD WINAPI XInviteGetAcceptedInfo(DWORD dwUserIndex, XINVITE_INFO *pInfo)
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pInfo is NULL.", __func__);
 		return ERROR_INVALID_PARAMETER;
 	}
-
-	XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s TODO.", __func__);
-	if (false) {
-		//pInfo->hostInfo.hostAddress.ina.s_addr = resolvedNetAddr;
-		pInfo->hostInfo.hostAddress.wPortOnline = htons(2000);
-
-		XUID host_xuid = 1234561000000032;
-		pInfo->hostInfo.hostAddress.inaOnline.s_addr = 8192;
-
-		DWORD user_id = host_xuid % 1000000000;
-		DWORD mac_fix = 0x00131000;
-
-		memset(&(pInfo->hostInfo.hostAddress.abEnet), 0, 6);
-		memset(&(pInfo->hostInfo.hostAddress.abOnline), 0, 6);
-
-		memcpy(&(pInfo->hostInfo.hostAddress.abEnet), &user_id, 4);
-		memcpy(&(pInfo->hostInfo.hostAddress.abOnline), &user_id, 4);
-
-		memcpy((BYTE*)&(pInfo->hostInfo.hostAddress.abEnet) + 3, (BYTE*)&mac_fix + 1, 3);
-		memcpy((BYTE*)&(pInfo->hostInfo.hostAddress.abOnline) + 17, (BYTE*)&mac_fix + 1, 3);
-
-		pInfo->fFromGameInvite = TRUE;
-		pInfo->dwTitleID = 0x4D53080F;
-		XNetCreateKey(&(pInfo->hostInfo.sessionID), &(pInfo->hostInfo.keyExchangeKey));
-		pInfo->xuidInvitee = xlive_users_info[dwUserIndex]->xuid;
-		pInfo->xuidInviter = host_xuid;
-
-		return ERROR_SUCCESS;
+	
+	if (xlln_direct_ip_connect.localPlayerId >= XLIVE_LOCAL_USER_COUNT) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s User 0x%08x does not exist.", __func__, xlln_direct_ip_connect.localPlayerId);
+		return ERROR_NOT_LOGGED_ON;
 	}
-	return ERROR_FUNCTION_FAILED;
+	if (xlive_users_info[xlln_direct_ip_connect.localPlayerId]->UserSigninState == eXUserSigninState_NotSignedIn) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s User %u is not signed in.", __func__, xlln_direct_ip_connect.localPlayerId);
+		return ERROR_NOT_LOGGED_ON;
+	}
+	
+	if (!xlln_direct_ip_connect.remoteInstanceId) {
+		return XONLINE_E_MESSAGE_PROPERTY_NOT_FOUND;
+	}
+	
+	XNADDR remoteXnaddr;
+	uint32_t resultNetter = NetterEntityGetXnaddrByInstanceId(&remoteXnaddr, 0, xlln_direct_ip_connect.remoteInstanceId);
+	if (resultNetter) {
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_DEBUG | XLLN_LOG_LEVEL_ERROR
+			, "%s NetterEntityGetXnaddrByInstanceId failed to find NetEntity 0x%08x with error 0x%08x."
+			, __func__
+			, xlln_direct_ip_connect.remoteInstanceId
+			, resultNetter
+		);
+		
+		XllnDirectIpConnectCancel();
+		MessageBoxW(xlln_window_hwnd, L"Unable to connect to the lobby (no xnaddr route).", L"XLLN Direct IP Connect Error", MB_OK);
+		
+		return XONLINE_E_MESSAGE_PROPERTY_NOT_FOUND;
+	}
+	
+	pInfo->hostInfo.sessionID = xlln_direct_ip_connect.remoteSessionId;
+	pInfo->hostInfo.keyExchangeKey = xlln_direct_ip_connect.remoteKeyExchangeKey;
+	pInfo->hostInfo.hostAddress = remoteXnaddr;
+	pInfo->dwTitleID = xlln_direct_ip_connect.remoteTitleId;
+	pInfo->fFromGameInvite = TRUE;
+	pInfo->xuidInvitee = xlive_users_info[xlln_direct_ip_connect.localPlayerId]->xuid;
+	pInfo->xuidInviter = xlln_direct_ip_connect.remoteXuid;
+	
+	return ERROR_SUCCESS;
 }
 
 // #5316

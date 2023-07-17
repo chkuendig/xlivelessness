@@ -19,6 +19,8 @@ namespace XLLNNetPacketType {
 		"QOS_RESPONSE",
 		"HUB_OUT_OF_BAND",
 		"HUB_RELAY",
+		"DIRECT_IP_REQUEST",
+		"DIRECT_IP_RESPONSE",
 	};
 	typedef enum : uint8_t {
 		tUNKNOWN = 0,
@@ -36,6 +38,8 @@ namespace XLLNNetPacketType {
 		tQOS_RESPONSE,
 		tHUB_OUT_OF_BAND,
 		tHUB_RELAY,
+		tDIRECT_IP_REQUEST,
+		tDIRECT_IP_RESPONSE,
 	} TYPE;
 
 #pragma pack(push, 1) // Save then set byte alignment setting.
@@ -110,6 +114,17 @@ namespace XLLNNetPacketType {
 		NET_USER_PACKET netterOrigin;
 		// The data following this is the packet data.
 	} HUB_RELAY;
+	
+	typedef struct {
+		uint32_t joinRequestSignature = 0;
+		uint8_t passwordSha256[32];
+	} DIRECT_IP_REQUEST;
+	
+	typedef struct {
+		uint32_t joinRequestSignature = 0;
+		uint32_t instanceId = 0;
+		uint32_t titleId = 0;
+	} DIRECT_IP_RESPONSE;
 
 #pragma pack(pop) // Return to original alignment setting.
 

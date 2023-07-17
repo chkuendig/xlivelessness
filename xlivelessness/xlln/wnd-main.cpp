@@ -8,6 +8,7 @@
 #include "./wnd-connections.hpp"
 #include "./xlln-keep-alive.hpp"
 #include "../utils/utils.hpp"
+#include "../utils/util-socket.hpp"
 #include "../xlive/xdefs.hpp"
 #include "../xlive/xlive.hpp"
 #include "../xlive/packet-handler.hpp"
@@ -61,8 +62,16 @@ static LRESULT CALLBACK DLLWindowProc(HWND hwnd, UINT message, WPARAM wParam, LP
 				free(textLabel);
 			}
 			{
-				char textLabel[] = "Broadcast address:";
-				TextOutA(hdc, 5, 120, textLabel, strlen(textLabel));
+				char textLabel[] = "Direct IP Password:";
+				TextOutA(hdc, 5, 108, textLabel, strlen(textLabel));
+			}
+			{
+				char textLabel[] = "Direct IP Host IP:Port:";
+				TextOutA(hdc, 5, 134, textLabel, strlen(textLabel));
+			}
+			{
+				char textLabel[] = "Broadcast address(es):";
+				TextOutA(hdc, 5, 160, textLabel, strlen(textLabel));
 			}
 			
 			EndPaint(xlln_window_hwnd, &ps);
@@ -104,42 +113,53 @@ static LRESULT CALLBACK DLLWindowProc(HWND hwnd, UINT message, WPARAM wParam, LP
 			CreateWindowA(WC_BUTTONA, "Logout", WS_CHILD | WS_TABSTOP,
 				140, 74, 75, 25, hwnd, (HMENU)MYWINDOW_BTN_LOGOUT, xlln_hModule, NULL);
 			
+			CreateWindowA(WC_EDITA, xlln_direct_ip_connect_password, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL,
+				150, 106, 250, 22, hwnd, (HMENU)MYWINDOW_TBX_DIRECT_IP_CONNECT_PASSWORD, xlln_hModule, NULL);
+			
+			CreateWindowA(WC_EDITA, xlln_direct_ip_connect_ip_port, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL,
+				150, 132, 250, 22, hwnd, (HMENU)MYWINDOW_TBX_DIRECT_IP_CONNECT_IP_PORT, xlln_hModule, NULL);
+			
+			CreateWindowA(WC_BUTTONA, "Connect", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+				404, 131, 75, 25, hwnd, (HMENU)MYWINDOW_BTN_DIRECT_IP_CONNECT, xlln_hModule, NULL);
+			
 			CreateWindowA(WC_EDITA, broadcastAddrInput, WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL,
-				5, 140, 475, 22, hwnd, (HMENU)MYWINDOW_TBX_BROADCAST, xlln_hModule, NULL);
+				5, 180, 475, 22, hwnd, (HMENU)MYWINDOW_TBX_BROADCAST, xlln_hModule, NULL);
 			
 			if (xlln_debug) {
+				const int debugElementHeightOffset = 210;
+				
 				CreateWindowA(WC_BUTTONA, "XLIVE", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					5, 170, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_XLIVE, xlln_hModule, NULL);
+					5, debugElementHeightOffset, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_XLIVE, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "XLIVELESSNESS", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					85, 170, 140, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_XLLN, xlln_hModule, NULL);
+					85, debugElementHeightOffset, 140, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_XLLN, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "XLLN MODULE", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					235, 170, 140, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_XLLN_MOD, xlln_hModule, NULL);
+					235, debugElementHeightOffset, 140, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_XLLN_MOD, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "OTHER", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					375, 170, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_OTHER, xlln_hModule, NULL);
+					375, debugElementHeightOffset, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_CTX_OTHER, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "TRACE", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					5, 190, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_TRACE, xlln_hModule, NULL);
+					5, debugElementHeightOffset + 20, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_TRACE, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "DEBUG", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					85, 190, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_DEBUG, xlln_hModule, NULL);
+					85, debugElementHeightOffset + 20, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_DEBUG, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "INFO", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					165, 190, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_INFO, xlln_hModule, NULL);
+					165, debugElementHeightOffset + 20, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_INFO, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "WARN", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					245, 190, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_WARN, xlln_hModule, NULL);
+					245, debugElementHeightOffset + 20, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_WARN, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "ERROR", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					325, 190, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_ERROR, xlln_hModule, NULL);
+					325, debugElementHeightOffset + 20, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_ERROR, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "FATAL", BS_CHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-					405, 190, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_FATAL, xlln_hModule, NULL);
+					405, debugElementHeightOffset + 20, 70, 20, hwnd, (HMENU)MYWINDOW_CHK_DBG_LVL_FATAL, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_EDITA, "", WS_CHILD | (xlln_debug ? WS_VISIBLE : 0) | WS_BORDER | ES_MULTILINE | WS_SIZEBOX | WS_TABSTOP | WS_HSCROLL,
-					5, 210, 475, 420, hwnd, (HMENU)MYWINDOW_TBX_TEST, xlln_hModule, NULL);
+					5, debugElementHeightOffset + 40, 475, 420, hwnd, (HMENU)MYWINDOW_TBX_TEST, xlln_hModule, NULL);
 				
 				CreateWindowA(WC_BUTTONA, "Test", WS_CHILD | WS_VISIBLE | WS_TABSTOP,
 					5, 74, 75, 25, hwnd, (HMENU)MYWINDOW_BTN_TEST, xlln_hModule, NULL);
@@ -292,6 +312,104 @@ Executable Launch Parameters:\n\
 					uint32_t result_logout = XLLNLogout(xlln_login_player);
 					break;
 				}
+				case MYWINDOW_BTN_DIRECT_IP_CONNECT: {
+					char jlbuffer[500];
+					GetDlgItemTextA(xlln_window_hwnd, MYWINDOW_TBX_DIRECT_IP_CONNECT_IP_PORT, jlbuffer, 500);
+					char *jlbuffer2 = CloneString(jlbuffer);
+					
+					char *current = jlbuffer;
+					char *colon = strrchr(current, ':');
+					if (!colon) {
+						MessageBoxW(xlln_window_hwnd, L"No port was specified.", L"XLLN Direct IP Connect Error", MB_OK);
+						delete[] jlbuffer2;
+						break;
+					}
+					
+					colon[0] = 0;
+					
+					if (current[0] == '[') {
+						current = &current[1];
+						if (colon[-1] != ']') {
+							MessageBoxW(xlln_window_hwnd, L"An invalid IP was specified.", L"XLLN Direct IP Connect Error", MB_OK);
+							delete[] jlbuffer2;
+							break;
+						}
+						colon[-1] = 0;
+					}
+					
+					uint16_t portHBO = 0;
+					if (sscanf_s(&colon[1], "%hu", &portHBO) != 1 || !portHBO) {
+						MessageBoxW(xlln_window_hwnd, L"An invalid port was specified.", L"XLLN Direct IP Connect Error", MB_OK);
+						delete[] jlbuffer2;
+						break;
+					}
+					
+					addrinfo hints;
+					memset(&hints, 0, sizeof(hints));
+					
+					hints.ai_family = PF_UNSPEC;
+					hints.ai_socktype = SOCK_DGRAM;
+					hints.ai_protocol = IPPROTO_UDP;
+					
+					struct in6_addr serveraddr;
+					int rc = WS2_32_inet_pton(AF_INET, current, &serveraddr);
+					if (rc == 1) {
+						hints.ai_family = AF_INET;
+						hints.ai_flags |= AI_NUMERICHOST;
+					}
+					else {
+						rc = WS2_32_inet_pton(AF_INET6, current, &serveraddr);
+						if (rc == 1) {
+							hints.ai_family = AF_INET6;
+							hints.ai_flags |= AI_NUMERICHOST;
+						}
+					}
+					
+					SOCKADDR_STORAGE sockaddr;
+					memset(&sockaddr, 0, sizeof(sockaddr));
+					{
+						addrinfo *res;
+						int error = getaddrinfo(current, NULL, &hints, &res);
+						if (error) {
+							MessageBoxW(xlln_window_hwnd, L"Unable to parse the IP address.", L"XLLN Direct IP Connect Error", MB_OK);
+							delete[] jlbuffer2;
+							break;
+						}
+						
+						addrinfo *nextRes = res;
+						while (nextRes) {
+							if (nextRes->ai_family == AF_INET) {
+								memcpy(&sockaddr, res->ai_addr, res->ai_addrlen);
+								(*(struct sockaddr_in*)&sockaddr).sin_port = htons(portHBO);
+								break;
+							}
+							else if (nextRes->ai_family == AF_INET6) {
+								memcpy(&sockaddr, res->ai_addr, res->ai_addrlen);
+								(*(struct sockaddr_in6*)&sockaddr).sin6_port = htons(portHBO);
+								break;
+							}
+							else {
+								nextRes = nextRes->ai_next;
+							}
+						}
+						
+						freeaddrinfo(res);
+					}
+					
+					if (!sockaddr.ss_family) {
+						MessageBoxW(xlln_window_hwnd, L"Unable to parse the IP address.", L"XLLN Direct IP Connect Error", MB_OK);
+						delete[] jlbuffer2;
+						break;
+					}
+					
+					delete[] xlln_direct_ip_connect_ip_port;
+					xlln_direct_ip_connect_ip_port = jlbuffer2;
+					jlbuffer2 = 0;
+					
+					XllnDirectIpConnectTo(xlln_login_player, &sockaddr, xlln_direct_ip_connect_password);
+					
+					break;
+				}
 #define XLLN_CHK_DBG_TOGGLE(checkbox_menu_btn_id, log_level_flag) {\
 bool checked = IsDlgButtonChecked(xlln_window_hwnd, checkbox_menu_btn_id) != BST_CHECKED;\
 CheckDlgButton(xlln_window_hwnd, checkbox_menu_btn_id, checked ? BST_CHECKED : BST_UNCHECKED);\
@@ -338,8 +456,7 @@ xlln_debuglog_level = checked ? (xlln_debuglog_level | log_level_flag) : (xlln_d
 					break;
 				}
 				case MYWINDOW_BTN_TEST: {
-					// WIP. User index 0.
-					XLiveNotifyAddEvent(XN_LIVE_INVITE_ACCEPTED, 0);
+					
 					break;
 				}
 				default: {
@@ -347,14 +464,20 @@ xlln_debuglog_level = checked ? (xlln_debuglog_level | log_level_flag) : (xlln_d
 						if (xlln_window_hwnd) {
 							char jlbuffer[500];
 							GetDlgItemTextA(xlln_window_hwnd, MYWINDOW_TBX_BROADCAST, jlbuffer, 500);
-							size_t buflen = strlen(jlbuffer) + 1;
 							delete[] broadcastAddrInput;
-							broadcastAddrInput = new char[buflen];
-							memcpy(broadcastAddrInput, jlbuffer, buflen);
-							broadcastAddrInput[buflen - 1] = 0;
+							broadcastAddrInput = CloneString(jlbuffer);
 							char *temp = CloneString(broadcastAddrInput);
 							ParseBroadcastAddrInput(temp);
 							delete[] temp;
+						}
+						break;
+					}
+					if (wParam == ((EN_CHANGE << 16) | MYWINDOW_TBX_DIRECT_IP_CONNECT_PASSWORD)) {
+						if (xlln_window_hwnd) {
+							char jlbuffer[500];
+							GetDlgItemTextA(xlln_window_hwnd, MYWINDOW_TBX_DIRECT_IP_CONNECT_PASSWORD, jlbuffer, 500);
+							delete[] xlln_direct_ip_connect_password;
+							xlln_direct_ip_connect_password = CloneString(jlbuffer);
 						}
 						break;
 					}
@@ -485,7 +608,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpParam)
 	wchar_t *windowTitle = FormMallocString(L"XLLN #%d v%d.%d.%d.%d", xlln_local_instance_index, DLL_VERSION);
 	
 	HWND hwdParent = NULL;// FindWindowW(L"Window Injected Into ClassName", L"Window Injected Into Caption");
-	xlln_window_hwnd = CreateWindowExW(0, windowclassname, windowTitle, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, xlln_debug ? 700 : 225, hwdParent, xlln_window_hMenu, xlln_hModule, NULL);
+	xlln_window_hwnd = CreateWindowExW(0, windowclassname, windowTitle, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 500, xlln_debug ? 740 : 265, hwdParent, xlln_window_hMenu, xlln_hModule, NULL);
 	
 	free(windowTitle);
 	
@@ -507,7 +630,7 @@ static DWORD WINAPI ThreadProc(LPVOID lpParam)
 	
 	ShowWindow(xlln_window_hwnd, xlln_debug ? SW_NORMAL : SW_HIDE);
 	
-	int textBoxes[] = { MYWINDOW_TBX_USERNAME, MYWINDOW_TBX_TEST, MYWINDOW_TBX_BROADCAST };
+	int textBoxes[] = { MYWINDOW_TBX_USERNAME, MYWINDOW_TBX_TEST, MYWINDOW_TBX_BROADCAST, MYWINDOW_TBX_DIRECT_IP_CONNECT_PASSWORD, MYWINDOW_TBX_DIRECT_IP_CONNECT_IP_PORT };
 	
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0)) {

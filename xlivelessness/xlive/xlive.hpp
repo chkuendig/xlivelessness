@@ -30,6 +30,19 @@ struct EligibleAdapter {
 	BOOL hasDnsServer;
 };
 
+typedef struct {
+	uint32_t joinRequestSignature = 0;
+	__time64_t timeoutAt = 0;
+	uint32_t localPlayerId = 0;
+	uint32_t remoteInstanceId = 0;
+	XUID remoteXuid = 0;
+	uint32_t remoteTitleId = 0;
+	XNKID remoteSessionId;
+	XNKEY remoteKeyExchangeKey;
+} DIRECT_IP_CONNECT;
+
+extern DIRECT_IP_CONNECT xlln_direct_ip_connect;
+
 extern CRITICAL_SECTION xlive_critsec_xfriends_enumerators;
 extern std::map<HANDLE, std::vector<uint32_t>> xlive_xfriends_enumerators;
 
@@ -48,3 +61,5 @@ extern CRITICAL_SECTION xlive_critsec_title_server_enumerators;
 extern bool xlive_auto_login_on_xliveinitialize;
 
 INT RefreshNetworkAdapters();
+void XllnDirectIpConnectCancel();
+void XllnDirectIpConnectTo(uint32_t local_player_id, SOCKADDR_STORAGE *remote_sockaddr, const char *remote_password);

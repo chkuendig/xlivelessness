@@ -3,6 +3,7 @@
 #include "../xlive/xdefs.hpp"
 #include "../xlln/debug-text.hpp"
 #include "../xlln/xlln.hpp"
+#include "../xlln/wnd-main.hpp"
 #include "../xlive/xlive.hpp"
 #include "../xlive/packet-handler.hpp"
 #include "../xlive/live-over-lan.hpp"
@@ -38,14 +39,20 @@ static void ThreadKeepAlive()
 			, __func__
 		);
 		
+		__time64_t ltime;
+		_time64(&ltime);//seconds since epoch.
+		
+		if (xlln_direct_ip_connect.timeoutAt && xlln_direct_ip_connect.timeoutAt < ltime) {
+			XllnDirectIpConnectCancel();
+			MessageBoxW(xlln_window_hwnd, L"Connection attempt timed out.", L"XLLN Direct IP Connect Error", MB_OK);
+		}
+		
 		hubRequest->instanceId = ntohl(xlive_local_xnAddr.inaOnline.s_addr);
 		hubRequest->portBaseHBO = xlive_base_port;
 		
 		if (hubRequest->instanceId) {
 			EnterCriticalSection(&xlive_critsec_broadcast_addresses);
 			
-			__time64_t ltime;
-			_time64(&ltime);//seconds since epoch.
 			__time64_t timeToSendKeepAlive = ltime - 30;
 			for (auto const &broadcastEntity : xlive_broadcast_addresses) {
 				if (broadcastEntity.entityType != XLLNBroadcastEntity::TYPE::tHUB_SERVER && broadcastEntity.entityType != XLLNBroadcastEntity::TYPE::tUNKNOWN) {

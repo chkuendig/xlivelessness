@@ -581,6 +581,21 @@ typedef XNADDR TSADDR;
 #define XONLINE_S_STORAGE_FILE_NOT_MODIFIED                         0x0015C013
 #define XONLINE_E_STORAGE_UNSUPPORTED_CONTENT_TYPE                  0x8015CA0E
 
+// Errors returned by Messages                          = 0x80155AXX
+#define XONLINE_E_MESSAGE_INVALID_MESSAGE_ID            _HRESULT_TYPEDEF_(0x80155A01L)  // the specified message was not found
+#define XONLINE_E_MESSAGE_PROPERTY_DOWNLOAD_REQUIRED    _HRESULT_TYPEDEF_(0x80155A02L)  // the property was too large to fit into the details block, it must be retrieved separately using XOnlineMessageDownloadAttachmentxxx
+#define XONLINE_E_MESSAGE_PROPERTY_NOT_FOUND            _HRESULT_TYPEDEF_(0x80155A03L)  // the specified property tag was not found
+#define XONLINE_E_MESSAGE_NO_VALID_SENDS_TO_REVOKE      _HRESULT_TYPEDEF_(0x80155A04L)  // no valid sends to revoke were found
+#define XONLINE_E_MESSAGE_NO_MESSAGE_DETAILS            _HRESULT_TYPEDEF_(0x80155A05L)  // the specified message does not have any details
+#define XONLINE_E_MESSAGE_INVALID_TITLE_ID              _HRESULT_TYPEDEF_(0x80155A06L)  // an invalid title ID was specified
+#define XONLINE_E_MESSAGE_SENDER_BLOCKED                _HRESULT_TYPEDEF_(0x80155A07L)  // a send failed because the recipient has blocked the sender
+#define XONLINE_E_MESSAGE_MAX_DETAILS_SIZE_EXCEEDED     _HRESULT_TYPEDEF_(0x80155A08L)  // the property couldn't be added because the maximum details size would be exceeded
+#define XONLINE_E_MESSAGE_INVALID_MESSAGE_TYPE          _HRESULT_TYPEDEF_(0x80155A09L)
+#define XONLINE_E_MESSAGE_USER_OPTED_OUT                _HRESULT_TYPEDEF_(0x80155A0AL)  // a send failed because the message is marketing and the recipient has opted-out for the sending title
+// Success codes returned by Messages                   = 0x00155AXX
+#define XONLINE_S_MESSAGE_PENDING_SYNC                  _HRESULT_TYPEDEF_(0x00155A01L)  // updated message list is currently being retrieved (after logon or disabling summary refresh), returned results may be out of date
+
+
 typedef enum
 {
 	XONLINE_NAT_OPEN = 1,

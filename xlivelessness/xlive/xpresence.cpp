@@ -1,3 +1,4 @@
+#include <winsock2.h>
 #include "xdefs.hpp"
 #include "xpresence.hpp"
 #include "xlive.hpp"

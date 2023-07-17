@@ -21,11 +21,14 @@
 #define MYWINDOW_CHK_AUTOLOGIN		(WM_APP + 124)
 #define MYWINDOW_BTN_LOGOUT			(WM_APP + 125)
 #define MYWINDOW_BTN_TEST			(WM_APP + 126)
-#define MYWINDOW_TBX_BROADCAST		(WM_APP + 127)
-#define MYWINDOW_LST_SOCKETS		(WM_APP + 130)
-#define MYWINDOW_TRE_CONNECTIONS	(WM_APP + 131)
-#define MYWINDOW_BTN_REFRESH_CONNS	(WM_APP + 132)
-#define MYWINDOW_BTN_DELETE_CONNS	(WM_APP + 133)
+#define MYWINDOW_TBX_DIRECT_IP_CONNECT_IP_PORT		(WM_APP + 127)
+#define MYWINDOW_TBX_DIRECT_IP_CONNECT_PASSWORD		(WM_APP + 128)
+#define MYWINDOW_BTN_DIRECT_IP_CONNECT				(WM_APP + 129)
+#define MYWINDOW_TBX_BROADCAST		(WM_APP + 130)
+#define MYWINDOW_LST_SOCKETS		(WM_APP + 140)
+#define MYWINDOW_TRE_CONNECTIONS	(WM_APP + 141)
+#define MYWINDOW_BTN_REFRESH_CONNS	(WM_APP + 142)
+#define MYWINDOW_BTN_DELETE_CONNS	(WM_APP + 143)
 #define MYWINDOW_TBX_TEST			(WM_APP + 150)
 #define MYWINDOW_CHK_DBG_CTX_XLIVE		(WM_APP + 151)
 #define MYWINDOW_CHK_DBG_CTX_XLLN		(WM_APP + 152)
@@ -87,6 +90,8 @@ extern uint32_t xlln_login_player;
 extern uint32_t xlln_login_player_h[];
 extern BOOL xlln_debug;
 extern char *broadcastAddrInput;
+extern char *xlln_direct_ip_connect_password;
+extern char *xlln_direct_ip_connect_ip_port;
 extern CRITICAL_SECTION xlln_critsec_base_port_offset_mappings;
 extern std::map<uint8_t, BASE_PORT_OFFSET_MAPPING*> xlln_base_port_mappings_offset;
 extern std::map<uint16_t, BASE_PORT_OFFSET_MAPPING*> xlln_base_port_mappings_original;

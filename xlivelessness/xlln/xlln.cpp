@@ -43,6 +43,8 @@ static CRITICAL_SECTION xlive_critsec_recvfrom_handler_funcs;
 static std::map<DWORD, char*> xlive_recvfrom_handler_funcs;
 
 char *broadcastAddrInput = 0;
+char *xlln_direct_ip_connect_password = 0;
+char *xlln_direct_ip_connect_ip_port = 0;
 
 CRITICAL_SECTION xlln_critsec_base_port_offset_mappings;
 std::map<uint8_t, BASE_PORT_OFFSET_MAPPING*> xlln_base_port_mappings_offset;
@@ -713,6 +715,14 @@ bool InitXLLN(HMODULE hModule)
 		broadcastAddrInput = new char[1]{ "" };
 	}
 	
+	if (!xlln_direct_ip_connect_password) {
+		xlln_direct_ip_connect_password = new char[1]{ "" };
+	}
+	
+	if (!xlln_direct_ip_connect_ip_port) {
+		xlln_direct_ip_connect_ip_port = new char[1]{ "" };
+	}
+	
 	for (int i = 0; i < XLIVE_LOCAL_USER_COUNT; i++) {
 		xlive_users_info[i] = (XUSER_SIGNIN_INFO*)malloc(sizeof(XUSER_SIGNIN_INFO));
 		memset(xlive_users_info[i], 0, sizeof(XUSER_SIGNIN_INFO));
@@ -806,6 +816,16 @@ bool UninitXLLN()
 	if (broadcastAddrInput) {
 		delete[] broadcastAddrInput;
 		broadcastAddrInput = 0;
+	}
+	
+	if (xlln_direct_ip_connect_password) {
+		delete[] xlln_direct_ip_connect_password;
+		xlln_direct_ip_connect_password = 0;
+	}
+	
+	if (xlln_direct_ip_connect_ip_port) {
+		delete[] xlln_direct_ip_connect_ip_port;
+		xlln_direct_ip_connect_ip_port = 0;
 	}
 	
 	return true;

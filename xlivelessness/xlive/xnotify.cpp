@@ -1,3 +1,4 @@
+#include <winsock2.h>
 #include "xdefs.hpp"
 #include "xnotify.hpp"
 #include "../xlln/debug-text.hpp"

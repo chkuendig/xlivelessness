@@ -7,13 +7,16 @@
 #include "../xlln/debug-text.hpp"
 #include "../utils/utils.hpp"
 #include "../utils/util-socket.hpp"
+#include "../utils/sha256.hpp"
 #include "net-entity.hpp"
 #include "xsocket.hpp"
 #include "xnet.hpp"
 #include "xnetqos.hpp"
+#include "xnotify.hpp"
 #include "xlive.hpp"
 #include "../resource.h"
 #include "xlocator.hpp"
+#include "xsession.hpp"
 #include <ctime>
 #include <WS2tcpip.h>
 #include <set>
@@ -163,6 +166,8 @@ INT WINAPI XSocketRecvFromHelper(
 	const int packetSizeTypeQosRequest = sizeof(XLLNNetPacketType::QOS_REQUEST);
 	const int packetSizeTypeQosResponse = sizeof(XLLNNetPacketType::QOS_RESPONSE);
 	const int packetSizeTypeHubRelay = sizeof(XLLNNetPacketType::HUB_RELAY);
+	const int packetSizeTypeDirectIpRequest = sizeof(XLLNNetPacketType::DIRECT_IP_REQUEST);
+	const int packetSizeTypeDirectIpResponse = sizeof(XLLNNetPacketType::DIRECT_IP_RESPONSE);
 	
 	int packetSizeAlreadyProcessedOffset = 0;
 	int resultDataRecvSize = 0;
@@ -593,6 +598,224 @@ INT WINAPI XSocketRecvFromHelper(
 				}
 				
 				XLiveQosReceiveResponse(&packetQosResponse);
+				
+				packetSizeAlreadyProcessedOffset = dataRecvSize;
+				break;
+			}
+			case XLLNNetPacketType::tDIRECT_IP_REQUEST: {
+				if (dataRecvSize < packetSizeAlreadyProcessedOffset + packetSizeTypeDirectIpRequest) {
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_ERROR
+						, "%s Invalid %s received (insufficient size)."
+						, __func__
+						, XLLNNetPacketType::TYPE_NAMES[packetType]
+					);
+					packetSizeAlreadyProcessedOffset = dataRecvSize;
+					break;
+				}
+				
+				XLLNNetPacketType::DIRECT_IP_REQUEST &packetDirectIpRequest = *(XLLNNetPacketType::DIRECT_IP_REQUEST*)&dataBuffer[packetSizeAlreadyProcessedOffset];
+				
+				bool correctPassword = false;
+				{
+					char hostPassword[500];
+					GetDlgItemTextA(xlln_window_hwnd, MYWINDOW_TBX_DIRECT_IP_CONNECT_PASSWORD, hostPassword, 500);
+					
+					uint8_t hostPasswordSha256[32];
+					memset(hostPasswordSha256, 0, sizeof(hostPasswordSha256));
+					
+					uint32_t hostPasswordLen = strlen(hostPassword);
+					if (hostPasswordLen) {
+						mbedtls_sha256((uint8_t*)hostPassword, hostPasswordLen, hostPasswordSha256, 0);
+					}
+					
+					if (memcmp(hostPasswordSha256, packetDirectIpRequest.passwordSha256, sizeof(hostPasswordSha256)) == 0) {
+						correctPassword = true;
+					}
+				}
+				
+				{
+					char *sockAddrInfo = GET_SOCKADDR_INFO(packetForwardedSockAddrSize ? &packetForwardedSockAddr : sockAddrExternal);
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_DEBUG
+						, "%s Sending %s to %s %s."
+						, __func__
+						, XLLNNetPacketType::TYPE_NAMES[XLLNNetPacketType::tDIRECT_IP_RESPONSE]
+						, sockAddrInfo ? sockAddrInfo : ""
+						, correctPassword ? "having correct password" : "having incorrect password"
+					);
+					if (sockAddrInfo) {
+						free(sockAddrInfo);
+					}
+				}
+				
+				{
+					uint8_t *liveSessionSerialisedPacket = 0;
+					uint32_t liveSessionSerialisedPacketSize = 0;
+					
+					if (correctPassword) {
+						EnterCriticalSection(&xlln_critsec_liveoverlan_broadcast);
+						if (xlive_xlocator_local_session) {
+							if (!LiveOverLanSerialiseLiveSessionIntoNetPacket(xlive_xlocator_local_session, &liveSessionSerialisedPacket, &liveSessionSerialisedPacketSize)) {
+								XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_DEBUG
+									, "%s Failed to serialise Live Session for %s packet."
+									, __func__
+									, XLLNNetPacketType::TYPE_NAMES[XLLNNetPacketType::tDIRECT_IP_RESPONSE]
+								);
+							}
+						}
+						else {
+							for (auto const &entry : xlive_xsession_local_sessions) {
+								if (!(entry.second->liveSession->sessionType == XLLN_LIVEOVERLAN_SESSION_TYPE_XSESSION && entry.second->liveSession->sessionFlags & XSESSION_CREATE_HOST)) {
+									continue;
+								}
+								
+								if (!LiveOverLanSerialiseLiveSessionIntoNetPacket(entry.second->liveSession, &liveSessionSerialisedPacket, &liveSessionSerialisedPacketSize)) {
+									XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_DEBUG
+										, "%s Failed to serialise Live Session for %s packet."
+										, __func__
+										, XLLNNetPacketType::TYPE_NAMES[XLLNNetPacketType::tDIRECT_IP_RESPONSE]
+									);
+								}
+								
+								break;
+							}
+						}
+						LeaveCriticalSection(&xlln_critsec_liveoverlan_broadcast);
+					}
+					
+					if (liveSessionSerialisedPacket) {
+						const int packetSize = packetSizeHeaderType + packetSizeTypeDirectIpResponse + (liveSessionSerialisedPacketSize - packetSizeHeaderType);
+						
+						uint8_t *packetBuffer = new uint8_t[packetSize];
+						packetBuffer[0] = XLLNNetPacketType::tDIRECT_IP_RESPONSE;
+						XLLNNetPacketType::DIRECT_IP_RESPONSE &directIpResponse = *(XLLNNetPacketType::DIRECT_IP_RESPONSE*)&packetBuffer[packetSizeHeaderType];
+						directIpResponse.joinRequestSignature = packetDirectIpRequest.joinRequestSignature;
+						directIpResponse.instanceId = ntohl(xlive_local_xnAddr.inaOnline.s_addr);
+						directIpResponse.titleId = xlive_title_id;
+						
+						memcpy(&packetBuffer[packetSizeHeaderType + packetSizeTypeDirectIpResponse], &liveSessionSerialisedPacket[packetSizeHeaderType], liveSessionSerialisedPacketSize - packetSizeHeaderType);
+						
+						delete[] liveSessionSerialisedPacket;
+						liveSessionSerialisedPacket = 0;
+						
+						SendUnknownUserPacket(
+							perpetual_socket
+							, (char*)packetBuffer
+							, packetSize
+							, XLLNNetPacketType::tUNKNOWN
+							, false
+							, (packetForwardedSockAddrSize ? &packetForwardedSockAddr : sockAddrExternal)
+							, false
+							, 0
+							, 0
+						);
+						
+						delete[] packetBuffer;
+					}
+					else {
+						const int packetSize = packetSizeHeaderType + packetSizeTypeDirectIpResponse;
+						
+						uint8_t *packetBuffer = new uint8_t[packetSize];
+						packetBuffer[0] = XLLNNetPacketType::tDIRECT_IP_RESPONSE;
+						XLLNNetPacketType::DIRECT_IP_RESPONSE &directIpResponse = *(XLLNNetPacketType::DIRECT_IP_RESPONSE*)&packetBuffer[packetSizeHeaderType];
+						directIpResponse.joinRequestSignature = packetDirectIpRequest.joinRequestSignature;
+						directIpResponse.instanceId = 0;
+						directIpResponse.titleId = 0;
+						
+						int bytesSent = SendToPerpetualSocket(
+							perpetual_socket
+							, (char*)packetBuffer
+							, packetSize
+							, 0
+							, (const sockaddr*)(packetForwardedSockAddrSize ? &packetForwardedSockAddr : sockAddrExternal)
+							, packetForwardedSockAddrSize ? packetForwardedSockAddrSize : sockAddrExternalLen
+						);
+						
+						delete[] packetBuffer;
+					}
+				}
+				
+				packetSizeAlreadyProcessedOffset = dataRecvSize;
+				break;
+			}
+			case XLLNNetPacketType::tDIRECT_IP_RESPONSE: {
+				if (dataRecvSize < packetSizeAlreadyProcessedOffset + packetSizeTypeDirectIpResponse) {
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_ERROR
+						, "%s Invalid %s received (insufficient size)."
+						, __func__
+						, XLLNNetPacketType::TYPE_NAMES[packetType]
+					);
+					packetSizeAlreadyProcessedOffset = dataRecvSize;
+					break;
+				}
+				
+				XLLNNetPacketType::DIRECT_IP_RESPONSE &packetDirectIpResponse = *(XLLNNetPacketType::DIRECT_IP_RESPONSE*)&dataBuffer[packetSizeAlreadyProcessedOffset];
+				
+				if (packetDirectIpResponse.joinRequestSignature != xlln_direct_ip_connect.joinRequestSignature) {
+					packetSizeAlreadyProcessedOffset = dataRecvSize;
+					break;
+				}
+				if (!packetDirectIpResponse.instanceId) {
+					char *sockAddrInfo = GET_SOCKADDR_INFO(packetForwardedSockAddrSize ? &packetForwardedSockAddr : sockAddrExternal);
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_DEBUG
+						, "%s Recieved %s from %s stating no available lobby or password was wrong."
+						, __func__
+						, XLLNNetPacketType::TYPE_NAMES[XLLNNetPacketType::tDIRECT_IP_RESPONSE]
+						, sockAddrInfo ? sockAddrInfo : ""
+					);
+					if (sockAddrInfo) {
+						free(sockAddrInfo);
+					}
+					
+					XllnDirectIpConnectCancel();
+					MessageBoxW(xlln_window_hwnd, L"There is no available lobby or the password was wrong.", L"XLLN Direct IP Connect Error", MB_OK);
+					
+					packetSizeAlreadyProcessedOffset = dataRecvSize;
+					break;
+				}
+				
+				{
+					char *sockAddrInfo = GET_SOCKADDR_INFO(packetForwardedSockAddrSize ? &packetForwardedSockAddr : sockAddrExternal);
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_DEBUG
+						, "%s Recieved %s from %s."
+						, __func__
+						, XLLNNetPacketType::TYPE_NAMES[packetType]
+						, sockAddrInfo ? sockAddrInfo : ""
+					);
+					if (sockAddrInfo) {
+						free(sockAddrInfo);
+					}
+				}
+				
+				xlln_direct_ip_connect.remoteInstanceId = packetDirectIpResponse.instanceId;
+				xlln_direct_ip_connect.remoteTitleId = packetDirectIpResponse.titleId;
+				
+				packetSizeAlreadyProcessedOffset += packetSizeTypeDirectIpResponse;
+				
+				const uint8_t *liveSessionBuffer = (uint8_t*)&dataBuffer[packetSizeAlreadyProcessedOffset];
+				const int liveSessionBufferSize = dataRecvSize - packetSizeAlreadyProcessedOffset;
+				LIVE_SESSION *liveSession;
+				
+				if (!LiveOverLanDeserialiseLiveSession(liveSessionBuffer, liveSessionBufferSize, &liveSession)) {
+					XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVELESSNESS | XLLN_LOG_LEVEL_ERROR
+						, "%s Invalid %s received when parsing Live Session."
+						, __func__
+						, XLLNNetPacketType::TYPE_NAMES[packetType]
+					);
+					packetSizeAlreadyProcessedOffset = dataRecvSize;
+					break;
+				}
+				
+				xlln_direct_ip_connect.remoteXuid = liveSession->xuid;
+				xlln_direct_ip_connect.remoteSessionId = liveSession->xnkid;
+				xlln_direct_ip_connect.remoteKeyExchangeKey = liveSession->xnkey;
+				
+				LiveOverLanAddRemoteLiveSession(packetDirectIpResponse.instanceId, liveSession->sessionType, liveSession);
+				
+				xlln_direct_ip_connect.timeoutAt = 0;
+				
+				XLiveNotifyAddEvent(XN_LIVE_INVITE_ACCEPTED, xlln_direct_ip_connect.localPlayerId);
+				
+				EnableWindow(GetDlgItem(xlln_window_hwnd, MYWINDOW_BTN_DIRECT_IP_CONNECT), true);
 				
 				packetSizeAlreadyProcessedOffset = dataRecvSize;
 				break;

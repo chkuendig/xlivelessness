@@ -1,3 +1,4 @@
+#include <winsock2.h>
 #include "xdefs.hpp"
 #include "xshow.hpp"
 #include "../xlln/debug-text.hpp"
