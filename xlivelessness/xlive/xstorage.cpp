@@ -398,7 +398,7 @@ DWORD WINAPI XStorageBuildServerPathByXuid(
 		}
 	}
 	if (iUser >= XLIVE_LOCAL_USER_COUNT) {
-		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s Local XUID 0x%016x does not exist.", __func__, xuidUser);
+		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s Local XUID 0x%016I64x does not exist.", __func__, xuidUser);
 		return ERROR_NO_SUCH_USER;
 	}
 	return XStorageBuildServerPath(iUser, storageFacility, pvStorageFacilityInfo, dwStorageFacilityInfoSize, lpwszItemName, pwszServerPath, pdwServerPathLength);

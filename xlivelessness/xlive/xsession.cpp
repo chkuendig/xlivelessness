@@ -865,10 +865,10 @@ DWORD WINAPI XSessionJoinRemote(HANDLE hSession, DWORD dwXuidCount, const XUID *
 						xsessionDetails->pSessionMembers[iMember].xuidOnline = remoteXuid;
 						xsessionDetails->pSessionMembers[iMember].dwUserIndex = XLIVE_LOCAL_USER_INVALID;
 						if (xsessionDetails->pSessionMembers[iMember].dwFlags & XSESSION_MEMBER_FLAGS_ZOMBIE) {
-							XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_INFO, "%s Remote XUID 0x%016x was previously in the session.", __func__, remoteXuid);
+							XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_INFO, "%s Remote XUID 0x%016I64x was previously in the session.", __func__, remoteXuid);
 						}
 						else {
-							XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s Remote XUID 0x%016x is already in the session.", __func__, remoteXuid);
+							XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s Remote XUID 0x%016I64x is already in the session.", __func__, remoteXuid);
 						}
 						if (xsessionDetails->pSessionMembers[iMember].dwFlags & XSESSION_MEMBER_FLAGS_PRIVATE_SLOT) {
 							xsessionDetails->liveSession->slotsPrivateFilledCount--;

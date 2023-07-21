@@ -108,13 +108,14 @@ INT WINAPI XNetStartup(const XNetStartupParams *pxnsp)
 INT WINAPI XNetCleanup()
 {
 	TRACE_FX();
+	
 	xlive_net_initialized = FALSE;
+	ResetXNetStartupParams();
+	
 	if (!xlive_online_initialized) {
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s XLive Online is not initialised.", __func__);
 		return WSANOTINITIALISED;
 	}
-	
-	ResetXNetStartupParams();
 	
 	return ERROR_SUCCESS;
 }
@@ -187,7 +188,7 @@ INT WINAPI XNetRegisterKey(const XNKID *pxnkid, const XNKEY *pxnkey)
 		if (xlive_xnet_session_keys.count(sessionId)) {
 			LeaveCriticalSection(&xlive_critsec_xnet_session_keys);
 			XLLN_DEBUG_LOG(
-				XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pxnkid (0x%016x) is already registered."
+				XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pxnkid (0x%016I64x) is already registered."
 				, __func__
 				, sessionId
 			);
@@ -225,7 +226,7 @@ INT WINAPI XNetUnregisterKey(const XNKID* pxnkid)
 			EnterCriticalSection(&xlive_critsec_qos_listeners);
 			LeaveCriticalSection(&xlive_critsec_xnet_session_keys);
 			XLLN_DEBUG_LOG(
-				XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pxnkid (0x%016x) does not exist."
+				XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "%s pxnkid (0x%016I64x) does not exist."
 				, __func__
 				, sessionId
 			);

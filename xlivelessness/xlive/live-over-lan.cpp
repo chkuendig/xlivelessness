@@ -725,9 +725,9 @@ static VOID LiveOverLanEmpty()
 		{
 			EnterCriticalSection(&xlln_critsec_liveoverlan_sessions);
 			
-			time_t ltime;
-			time(&ltime);//seconds since epoch.
-			DWORD timetoremove = ((DWORD)ltime) - 15;
+			__time64_t ltime;
+			_time64(&ltime);//seconds since epoch.
+			uint64_t timetoremove = ((uint64_t)ltime) - 15;
 			std::vector<uint32_t> removesessions;
 			
 			for (auto const &session : liveoverlan_remote_sessions_xlocator) {

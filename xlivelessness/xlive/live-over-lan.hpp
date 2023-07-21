@@ -60,7 +60,7 @@ typedef struct {
 	LIVE_SESSION *liveSession;
 	// hostAddress
 	XNADDR xnAddr;
-	uint32_t timeOfLastContact;
+	uint64_t timeOfLastContact;
 } LIVE_SESSION_REMOTE;
 
 typedef struct {

@@ -599,7 +599,7 @@ void XLiveQosReceiveRequest(XLLNNetPacketType::QOS_REQUEST *packetQosRequest, SO
 	{
 		char *sockAddrInfo = GET_SOCKADDR_INFO(sockAddrExternal);
 		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_INFO
-			, "%s QOS_REQUEST from %s sessionId 0x%016X."
+			, "%s QOS_REQUEST from %s sessionId 0x%016I64x."
 			, __func__
 			, sockAddrInfo ? sockAddrInfo : "?"
 			, packetQosRequest->sessionId

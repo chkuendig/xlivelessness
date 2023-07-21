@@ -91,10 +91,12 @@ INT WINAPI XWSAStartup(WORD wVersionRequested, WSADATA *lpWSAData)
 		return result;
 	}
 	
-	result = XNetStartup(0);
-	if (result != ERROR_SUCCESS) {
-		XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "XNetStartup %08x.", result);
-		return result;
+	if (!xlive_net_initialized) {
+		result = XNetStartup(0);
+		if (result != ERROR_SUCCESS) {
+			XLLN_DEBUG_LOG(XLLN_LOG_CONTEXT_XLIVE | XLLN_LOG_LEVEL_ERROR, "XNetStartup %08x.", result);
+			return result;
+		}
 	}
 	
 	return ERROR_SUCCESS;
